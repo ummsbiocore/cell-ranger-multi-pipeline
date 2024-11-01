@@ -67,7 +67,7 @@ process mkfastq_prep {
 
 output:
  path "*"  ,emit:g_4_bcl00_g_0 
- val bcl_directory  ,emit:g_4_bcl_directory16_g_20 
+ val bcl_directory  ,emit:g_4_bcl_directory13_g_13 
 
 container 'quay.io/viascientific/pipeline_base_image:1.0'
 
@@ -177,7 +177,9 @@ lanes_10x = params.cellranger_multi_prep.lanes_10x
 physical_library_id = params.cellranger_multi_prep.physical_library_id
 feature_types = params.cellranger_multi_prep.feature_types
 //gene-expression
+create_bam = params.cellranger_multi_prep.create_bam
 expect_cells = params.cellranger_multi_prep.expect_cells
+force_cells = params.cellranger_multi_prep.force_cells
 cellranger_multi_chemistry = params.cellranger_multi_prep.cellranger_multi_chemistry
 r1_length = params.cellranger_multi_prep.r1_length
 include_introns = params.cellranger_multi_prep.include_introns
@@ -313,8 +315,8 @@ input:
  path reads
 
 output:
- val bcl_directory  ,emit:g_25_bcl_directory07_g_20 
- path "reads_fastq"  ,emit:g_25_reads18_g_20 
+ val bcl_directory  ,emit:g_25_bcl_directory05_g_13 
+ path "reads_fastq"  ,emit:g_25_reads16_g_13 
 
 disk { 1000.GB * task.attempt }
 errorStrategy 'retry'
@@ -328,11 +330,14 @@ mv $reads reads_fastq/.
 """
 }
 
+//* params.feature_ref =  ""  //* @input  @optional @single_file @description:"Feature reference CSV file, optional."
+
 //libraries
 sample = params.cellranger_count_prep.sample
 lane_of_library = params.cellranger_count_prep.lane_of_library
 library_types = params.cellranger_count_prep.library_types
 //gene-expression
+cellranger_count_create_bam = params.cellranger_count_prep.cellranger_count_create_bam
 cellranger_count_expect_cells = params.cellranger_count_prep.cellranger_count_expect_cells
 cellranger_count_r1_length = params.cellranger_count_prep.cellranger_count_r1_length
 cellranger_count_chemistry = params.cellranger_count_prep.cellranger_count_chemistry
@@ -943,7 +948,7 @@ input:
  path transcriptome
 
 output:
- path "*/${transcriptome}" ,optional:true  ,emit:g_18_reference01_g_20 
+ path "*/${transcriptome}" ,optional:true  ,emit:g_18_reference01_g_13 
 
 container 'quay.io/viascientific/pipeline_base_image:1.0'
 stageInMode 'copy'
@@ -953,118 +958,6 @@ script:
 """
 $cmd1
 """
-}
-
-//* @style @array:{sample,library_types} @multicolumn:{sample,library_types}
-
-//* autofill
-if ($HOSTNAME == "default"){
-    $CPU  = 16
-    $MEMORY = 120
-}
-//* platform
-//* platform
-//* autofill
-
-process cellranger_count {
-
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${run_id}_outs$/) "count/$filename"}
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${run_id}_web_summary.html$/) "cellranger_report/$filename"}
-input:
- path reads
- path ref
- path feature_ref
- val bcl_directory
- path config
- val fastq_start_directory
- path fastq_start_reads
-
-output:
- path "${run_id}_outs"  ,emit:g_13_outputDir00 
- path "${run_id}_web_summary.html"  ,emit:g_13_outputHTML11 
- path "${run_id}_raw_feature_bc_matrix.h5"  ,emit:g_13_h5_file22 
- path "${run_id}_filtered_feature_bc_matrix.h5"  ,emit:g_13_h5_file30_g_60 
-
-when:
-(params.run_cellranger_count && (params.run_cellranger_count == "yes")) || !params.run_cellranger_count
-
-script:
-
-config_id = config.toString().replace(".csv","").replace("config_","")
-run_id = "run_"+config_id
-bcl_directory2 = ""
-if (bcl_directory){
-	bcl_directory2 = bcl_directory.collect{ '"' + it + '"'}
-} else if (fastq_start_directory){
-	bcl_directory2 = fastq_start_directory.collect{ '"' + it + '"'}
-}
-
-"""
-#!/usr/bin/env python
-
-import subprocess
-import csv  
-import os
-import sys
-import glob
-
-def is_not_blank(s):
-	return bool(s and not s.isspace() and s != "null" and not s.startswith('NO_FILE'))
-
-sample = ${sample2}
-bcl_directory = ${bcl_directory2}
-lane_of_library = ${lane_of_library2}
-library_types = ${library_types2}
-feature_reference_text = "--feature-ref=${feature_ref}" if is_not_blank("${feature_ref}") else ""
-expect_cells_text = "--expect-cells=${cellranger_count_expect_cells}" if is_not_blank("${cellranger_count_expect_cells}") else ""
-r1_length_text = "--r1-length=${cellranger_count_r1_length}" if is_not_blank("${cellranger_count_r1_length}") else ""
-
-unique_lane_id = "${config_id}"
-print("## All Files:")
-for f in glob.glob('**/*', recursive=True):
-	print(f)
-
-with open(r'final_${config}', 'a') as f:
-	w = csv.writer(f)
-	if sample:
-		w.writerow(["fastqs","sample","library_type"])
-		for i in range(len(sample)):
-			if (lane_of_library[i] == "any" or lane_of_library[i] == "") or (unique_lane_id == lane_of_library[i]) :
-				for b in range(len(bcl_directory)):
-					bcl_name = bcl_directory[b].rstrip('/').rsplit('/', 1)[1]
-					## To Support multiple recursive directories
-					for path, currentDirectory, files in os.walk(bcl_name+"_fastq"):
-						if any(file.startswith(sample[i]+"_S") for file in files):
-							cur_path = os.path.abspath(".")
-							w.writerow([cur_path+"/"+path,sample[i],library_types[i]])
-					# if any(fname.startswith(sample[i]) for fname in os.listdir(bcl_name+"_fastq")):
-					# 	bcl_path = os.path.abspath(bcl_name+"_fastq")
-					# 	w.writerow([bcl_path,sample[i],library_types[i]])
-
-print("## Config File:")
-with open('final_${config}', 'r') as f:
-	print(f.read())
-
-cmd = "cellranger count --localcores=16 --localmem=120 ${cellranger_count_parameters} --id=${run_id} --chemistry=${cellranger_count_chemistry} --libraries=final_${config} --transcriptome=${ref}"+" "+r1_length_text+" "+feature_reference_text+ " "+ expect_cells_text
-print(cmd)
-
-p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-stdout, stderr = p.communicate()
-print(stdout.decode())
-print(stderr.decode())
-if p.returncode != 0:
-	sys.exit(p.returncode)
-
-subprocess.run("mv ${run_id}/outs ${run_id}_outs && rm -rf ${run_id}", shell=True, check=True)
-subprocess.run("cp ${run_id}_outs/web_summary.html ${run_id}_web_summary.html", shell=True, check=True)
-subprocess.run("cp ${run_id}_outs/*raw*.h5 ${run_id}_raw_feature_bc_matrix.h5", shell=True, check=True)
-subprocess.run("cp ${run_id}_outs/*filtered*.h5 ${run_id}_filtered_feature_bc_matrix.h5", shell=True, check=True)
-
-
-
-"""
-
-
 }
 
 //* autofill
@@ -1157,6 +1050,8 @@ with open(r'final_${config}', 'a') as f:
 		w.writerow(["r1-length","${r1_length}"])
 	if is_not_blank("${include_introns}"):
 		w.writerow(["include-introns","${include_introns}"])
+	if is_not_blank("${create_bam}"):
+		w.writerow(["create-bam","${create_bam}"])
 	if (is_not_blank("${feature_reference}") and ("${feature_reference}" != "NA")) or is_not_blank("${r1_length_feature}"):
 		w.writerow(["[feature]"])
 		if is_not_blank("${feature_reference}") and ("${feature_reference}" != "NA"):
@@ -1179,12 +1074,13 @@ with open(r'final_${config}', 'a') as f:
 				for b in range(len(bcl_directory)):
 					bcl_name = bcl_directory[b].rstrip('/').rsplit('/', 1)[1]
 					print(bcl_name)
-					if any(fname.startswith(fastq_id[i]) for fname in os.listdir(bcl_name+"_fastq")):
-						bcl_path = os.path.abspath(bcl_name+"_fastq")
-						print("directory: "+bcl_path)
-						print(glob.glob(bcl_name+"_fastq/"+fastq_id[i]+"*"))
-						if (demultiplexing == False or (demultiplexing == True and feature_types[i] != "VDJ-T")):
-							w.writerow([fastq_id[i],bcl_path,physical_library_id[i],feature_types[i]])
+					for root, dirs, files in os.walk(bcl_name + "_fastq"):
+						if any(fname.startswith(fastq_id[i]) for fname in files):
+							bcl_path = os.path.abspath(root)
+							print("directory: "+bcl_path)
+							print(glob.glob(os.path.join(root, fastq_id[i] + "*")))
+							if (demultiplexing == False or (demultiplexing == True and feature_types[i] != "VDJ-T")):
+								w.writerow([fastq_id[i],bcl_path,physical_library_id[i],feature_types[i]])
 
 	if sample_id: 
 		w.writerow(["[samples]"])
@@ -1263,37 +1159,6 @@ fi
 
 """
 
-}
-
-
-process h5_channel_collector {
-
-input:
- path files1
- path files2
-
-output:
- path "h5/*" ,optional:true  ,emit:g_60_h5_file00_g_61 
-
-"""
-mkdir h5 && mv *.h5 h5/ 2>/dev/null || true
-"""
-}
-
-
-process file_to_set_conversion_for_h5 {
-
-input:
- path h5
-
-output:
- tuple val(name),file(h5)  ,emit:g_61_h5_file00_g51_0 
-
-script:
-name = h5.baseName
-"""
-echo "done"	
-"""
 }
 
 
@@ -1412,6 +1277,8 @@ with open(r'${bamtofastq}_final_${config}', 'a') as f:
 		w.writerow(["r1-length","${r1_length}"])
 	if is_not_blank("${include_introns}"):
 		w.writerow(["include-introns","${include_introns}"])
+	if is_not_blank("${create_bam}"):
+		w.writerow(["create-bam","${create_bam}"])
 	if (is_not_blank("${feature_reference}") and ("${feature_reference}" != "NA")) or is_not_blank("${r1_length_feature}"):
 		w.writerow(["[feature]"])
 		if is_not_blank("${feature_reference}") and ("${feature_reference}" != "NA"):
@@ -1471,6 +1338,149 @@ subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp 
 """
 
 
+}
+
+//* @style @array:{sample,library_types} @multicolumn:{sample,library_types}
+
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 16
+    $MEMORY = 120
+}
+//* platform
+//* platform
+//* autofill
+
+process cellranger_count {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${run_id}_outs$/) "count/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${run_id}_web_summary.html$/) "cellranger_report/$filename"}
+input:
+ path reads
+ path ref
+ path feature_ref
+ val bcl_directory
+ path config
+ val fastq_start_directory
+ path fastq_start_reads
+
+output:
+ path "${run_id}_outs"  ,emit:g_13_outputDir00 
+ path "${run_id}_web_summary.html"  ,emit:g_13_outputHTML11 
+ path "${run_id}_raw_feature_bc_matrix.h5"  ,emit:g_13_h5_file22 
+ path "${run_id}_filtered_feature_bc_matrix.h5"  ,emit:g_13_h5_file30_g_60 
+
+when:
+(params.run_cellranger_count && (params.run_cellranger_count == "yes")) || !params.run_cellranger_count
+
+script:
+
+config_id = config.toString().replace(".csv","").replace("config_","")
+run_id = "run_"+config_id
+bcl_directory2 = ""
+if (bcl_directory){
+	bcl_directory2 = bcl_directory.collect{ '"' + it + '"'}
+} else if (fastq_start_directory){
+	bcl_directory2 = fastq_start_directory.collect{ '"' + it + '"'}
+}
+
+"""
+#!/usr/bin/env python
+
+import subprocess
+import csv  
+import os
+import sys
+import glob
+
+def is_not_blank(s):
+	return bool(s and not s.isspace() and s != "null" and not s.startswith('NO_FILE'))
+
+sample = ${sample2}
+bcl_directory = ${bcl_directory2}
+lane_of_library = ${lane_of_library2}
+library_types = ${library_types2}
+feature_reference_text = "--feature-ref=${feature_ref}" if is_not_blank("${feature_ref}") else ""
+expect_cells_text = "--expect-cells=${cellranger_count_expect_cells}" if is_not_blank("${cellranger_count_expect_cells}") else ""
+r1_length_text = "--r1-length=${cellranger_count_r1_length}" if is_not_blank("${cellranger_count_r1_length}") else ""
+
+unique_lane_id = "${config_id}"
+print("## All Files:")
+for f in glob.glob('**/*', recursive=True):
+	print(f)
+
+with open(r'final_${config}', 'a') as f:
+	w = csv.writer(f)
+	if sample:
+		w.writerow(["fastqs","sample","library_type"])
+		for i in range(len(sample)):
+			if (lane_of_library[i] == "any" or lane_of_library[i] == "") or (unique_lane_id == lane_of_library[i]) :
+				for b in range(len(bcl_directory)):
+					bcl_name = bcl_directory[b].rstrip('/').rsplit('/', 1)[1]
+					## To Support multiple recursive directories
+					for path, currentDirectory, files in os.walk(bcl_name+"_fastq"):
+						if any(file.startswith(sample[i]+"_S") for file in files):
+							cur_path = os.path.abspath(".")
+							w.writerow([cur_path+"/"+path,sample[i].strip(),library_types[i]])
+					# if any(fname.startswith(sample[i]) for fname in os.listdir(bcl_name+"_fastq")):
+					# 	bcl_path = os.path.abspath(bcl_name+"_fastq")
+					# 	w.writerow([bcl_path,sample[i],library_types[i]])
+
+print("## Config File:")
+with open('final_${config}', 'r') as f:
+	print(f.read())
+
+cmd = "cellranger count --localcores=16 --localmem=120 ${cellranger_count_parameters} --id=${run_id} --create-bam=${cellranger_count_create_bam} --chemistry=${cellranger_count_chemistry} --libraries=final_${config} --transcriptome=${ref}"+" "+r1_length_text+" "+feature_reference_text+ " "+ expect_cells_text
+print(cmd)
+
+p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+stdout, stderr = p.communicate()
+print(stdout.decode())
+print(stderr.decode())
+if p.returncode != 0:
+	sys.exit(p.returncode)
+
+subprocess.run("mv ${run_id}/outs ${run_id}_outs && rm -rf ${run_id}", shell=True, check=True)
+subprocess.run("cp ${run_id}_outs/web_summary.html ${run_id}_web_summary.html", shell=True, check=True)
+subprocess.run("cp ${run_id}_outs/*raw*.h5 ${run_id}_raw_feature_bc_matrix.h5", shell=True, check=True)
+subprocess.run("cp ${run_id}_outs/*filtered*.h5 ${run_id}_filtered_feature_bc_matrix.h5", shell=True, check=True)
+
+
+
+"""
+
+
+}
+
+
+process h5_channel_collector {
+
+input:
+ path files1
+ path files2
+
+output:
+ path "h5/*" ,optional:true  ,emit:g_60_h5_file00_g_61 
+
+"""
+mkdir h5 && mv *.h5 h5/ 2>/dev/null || true
+"""
+}
+
+
+process file_to_set_conversion_for_h5 {
+
+input:
+ path h5
+
+output:
+ tuple val(name),file(h5)  ,emit:g_61_h5_file00_g51_0 
+
+script:
+name = h5.baseName
+"""
+echo "done"	
+"""
 }
 
 //* autofill
@@ -3073,13 +3083,13 @@ workflow {
 
 mkfastq_prep()
 g_4_bcl00_g_0 = mkfastq_prep.out.g_4_bcl00_g_0
-g_4_bcl_directory16_g_20 = mkfastq_prep.out.g_4_bcl_directory16_g_20
-(g_4_bcl_directory15_g_55,g_4_bcl_directory13_g_13) = [g_4_bcl_directory16_g_20,g_4_bcl_directory16_g_20]
+g_4_bcl_directory13_g_13 = mkfastq_prep.out.g_4_bcl_directory13_g_13
+(g_4_bcl_directory16_g_20,g_4_bcl_directory15_g_55) = [g_4_bcl_directory13_g_13,g_4_bcl_directory13_g_13]
 
 
 mkfastq(g_4_bcl00_g_0.flatten())
 g_0_reads00_g_33 = mkfastq.out.g_0_reads00_g_33
-(g_0_reads00_g_20,g_0_reads00_g_13) = [g_0_reads00_g_33,g_0_reads00_g_33]
+(g_0_reads00_g_13,g_0_reads00_g_20) = [g_0_reads00_g_33,g_0_reads00_g_33]
 g_0_outputDir11 = mkfastq.out.g_0_outputDir11
 g_0_outputHTML22 = mkfastq.out.g_0_outputHTML22
 
@@ -3093,10 +3103,10 @@ g_22_reads00_g_25 = cellranger_fastq_prep.out.g_22_reads00_g_25
 
 
 cellranger_fastq_collect(g_22_reads00_g_25.collect())
-g_25_bcl_directory07_g_20 = cellranger_fastq_collect.out.g_25_bcl_directory07_g_20
-(g_25_bcl_directory07_g_55,g_25_bcl_directory05_g_13) = [g_25_bcl_directory07_g_20,g_25_bcl_directory07_g_20]
-g_25_reads18_g_20 = cellranger_fastq_collect.out.g_25_reads18_g_20
-(g_25_reads10_g_55,g_25_reads16_g_13) = [g_25_reads18_g_20,g_25_reads18_g_20]
+g_25_bcl_directory05_g_13 = cellranger_fastq_collect.out.g_25_bcl_directory05_g_13
+(g_25_bcl_directory07_g_20,g_25_bcl_directory07_g_55) = [g_25_bcl_directory05_g_13,g_25_bcl_directory05_g_13]
+g_25_reads16_g_13 = cellranger_fastq_collect.out.g_25_reads16_g_13
+(g_25_reads18_g_20,g_25_reads10_g_55) = [g_25_reads16_g_13,g_25_reads16_g_13]
 
 
 cellranger_count_prep()
@@ -3190,20 +3200,8 @@ g_7_reference00_g_18= g_7_reference00_g_18.ifEmpty(ch_empty_file_1)
 
 
 cellranger_ref_checker(g_7_reference00_g_18)
-g_18_reference01_g_20 = cellranger_ref_checker.out.g_18_reference01_g_20
-(g_18_reference01_g_13,g_18_reference01_g_55) = [g_18_reference01_g_20,g_18_reference01_g_20]
-
-g_0_reads00_g_13= g_0_reads00_g_13.ifEmpty(ch_empty_file_1) 
-g_4_bcl_directory13_g_13= g_4_bcl_directory13_g_13.ifEmpty("") 
-g_25_bcl_directory05_g_13= g_25_bcl_directory05_g_13.ifEmpty("") 
-g_25_reads16_g_13= g_25_reads16_g_13.ifEmpty(ch_empty_file_5) 
-
-
-cellranger_count(g_0_reads00_g_13.collect(),g_18_reference01_g_13,g_17_2_g_13,g_4_bcl_directory13_g_13,g_27_csvFile04_g_13.flatten(),g_25_bcl_directory05_g_13,g_25_reads16_g_13.collect())
-g_13_outputDir00 = cellranger_count.out.g_13_outputDir00
-g_13_outputHTML11 = cellranger_count.out.g_13_outputHTML11
-g_13_h5_file22 = cellranger_count.out.g_13_h5_file22
-g_13_h5_file30_g_60 = cellranger_count.out.g_13_h5_file30_g_60
+g_18_reference01_g_13 = cellranger_ref_checker.out.g_18_reference01_g_13
+(g_18_reference01_g_20,g_18_reference01_g_55) = [g_18_reference01_g_13,g_18_reference01_g_13]
 
 g_0_reads00_g_20= g_0_reads00_g_20.ifEmpty(ch_empty_file_1) 
 g_4_bcl_directory16_g_20= g_4_bcl_directory16_g_20.ifEmpty("") 
@@ -3231,17 +3229,6 @@ g_20_runFile30_g_54 = cellranger_multi.out.g_20_runFile30_g_54
 Multi_h5_explorer(g_20_outputDir00_g_59)
 g_59_h5_file01_g_60 = Multi_h5_explorer.out.g_59_h5_file01_g_60
 
-g_13_h5_file30_g_60= g_13_h5_file30_g_60.ifEmpty(ch_empty_file_1) 
-g_59_h5_file01_g_60= g_59_h5_file01_g_60.ifEmpty(ch_empty_file_2) 
-
-
-h5_channel_collector(g_13_h5_file30_g_60.collect(),g_59_h5_file01_g_60.collect())
-g_60_h5_file00_g_61 = h5_channel_collector.out.g_60_h5_file00_g_61
-
-
-file_to_set_conversion_for_h5(g_60_h5_file00_g_61.flatten())
-g_61_h5_file00_g51_0 = file_to_set_conversion_for_h5.out.g_61_h5_file00_g51_0
-
 
 bamtofastq_10x(g_20_runFile30_g_54,g_20_outputDir01_g_54)
 g_54_config_reads06_g_55 = bamtofastq_10x.out.g_54_config_reads06_g_55
@@ -3255,6 +3242,29 @@ cellranger_multi_after_demultiplexing(g_25_reads10_g_55.collect(),g_18_reference
 g_55_outputDir00 = cellranger_multi_after_demultiplexing.out.g_55_outputDir00
 g_55_outputHTML11 = cellranger_multi_after_demultiplexing.out.g_55_outputHTML11
 g_55_csvFile22 = cellranger_multi_after_demultiplexing.out.g_55_csvFile22
+
+g_0_reads00_g_13= g_0_reads00_g_13.ifEmpty(ch_empty_file_1) 
+g_4_bcl_directory13_g_13= g_4_bcl_directory13_g_13.ifEmpty("") 
+g_25_bcl_directory05_g_13= g_25_bcl_directory05_g_13.ifEmpty("") 
+g_25_reads16_g_13= g_25_reads16_g_13.ifEmpty(ch_empty_file_5) 
+
+
+cellranger_count(g_0_reads00_g_13.collect(),g_18_reference01_g_13,g_17_2_g_13,g_4_bcl_directory13_g_13,g_27_csvFile04_g_13.flatten(),g_25_bcl_directory05_g_13,g_25_reads16_g_13.collect())
+g_13_outputDir00 = cellranger_count.out.g_13_outputDir00
+g_13_outputHTML11 = cellranger_count.out.g_13_outputHTML11
+g_13_h5_file22 = cellranger_count.out.g_13_h5_file22
+g_13_h5_file30_g_60 = cellranger_count.out.g_13_h5_file30_g_60
+
+g_13_h5_file30_g_60= g_13_h5_file30_g_60.ifEmpty(ch_empty_file_1) 
+g_59_h5_file01_g_60= g_59_h5_file01_g_60.ifEmpty(ch_empty_file_2) 
+
+
+h5_channel_collector(g_13_h5_file30_g_60.collect(),g_59_h5_file01_g_60.collect())
+g_60_h5_file00_g_61 = h5_channel_collector.out.g_60_h5_file00_g_61
+
+
+file_to_set_conversion_for_h5(g_60_h5_file00_g_61.flatten())
+g_61_h5_file00_g51_0 = file_to_set_conversion_for_h5.out.g_61_h5_file00_g51_0
 
 
 
