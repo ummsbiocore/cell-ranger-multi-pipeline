@@ -40,12 +40,12 @@ ch_empty_file_5 = file("$baseDir/.emptyfiles/NO_FILE_5", hidden:true)
 ch_empty_file_6 = file("$baseDir/.emptyfiles/NO_FILE_6", hidden:true)
 ch_empty_file_7 = file("$baseDir/.emptyfiles/NO_FILE_7", hidden:true)
 
-g_10_4_g_20 = params.cmo_set && file(params.cmo_set, type: 'any').exists() ? file(params.cmo_set, type: 'any') : ch_empty_file_4
 g_10_4_g_55 = params.cmo_set && file(params.cmo_set, type: 'any').exists() ? file(params.cmo_set, type: 'any') : ch_empty_file_4
-g_11_2_g_20 = params.feature_reference && file(params.feature_reference, type: 'any').exists() ? file(params.feature_reference, type: 'any') : ch_empty_file_2
+g_10_4_g_20 = params.cmo_set && file(params.cmo_set, type: 'any').exists() ? file(params.cmo_set, type: 'any') : ch_empty_file_4
 g_11_2_g_55 = params.feature_reference && file(params.feature_reference, type: 'any').exists() ? file(params.feature_reference, type: 'any') : ch_empty_file_2
-g_12_3_g_20 = params.VDJ_reference && file(params.VDJ_reference, type: 'any').exists() ? file(params.VDJ_reference, type: 'any') : ch_empty_file_3
+g_11_2_g_20 = params.feature_reference && file(params.feature_reference, type: 'any').exists() ? file(params.feature_reference, type: 'any') : ch_empty_file_2
 g_12_3_g_55 = params.VDJ_reference && file(params.VDJ_reference, type: 'any').exists() ? file(params.VDJ_reference, type: 'any') : ch_empty_file_3
+g_12_3_g_20 = params.VDJ_reference && file(params.VDJ_reference, type: 'any').exists() ? file(params.VDJ_reference, type: 'any') : ch_empty_file_3
 g_17_2_g_13 = params.feature_ref && file(params.feature_ref, type: 'any').exists() ? file(params.feature_ref, type: 'any') : ch_empty_file_2
 if (params.reads){
 Channel
@@ -150,7 +150,7 @@ input:
  path bcl_files
 
 output:
- path "${bcl_files}_fastq"  ,emit:g_0_reads00_g_33 
+ path "${bcl_files}_fastq"  ,emit:g_0_reads00_g_13 
  path "${bcl_files}_reports"  ,emit:g_0_outputDir11 
  path "${bcl_files}_laneBarcode.html" ,optional:true  ,emit:g_0_outputHTML22 
 
@@ -192,8 +192,11 @@ r1_length_feature = params.cellranger_multi_prep.r1_length_feature
 r1_length_vdj = params.cellranger_multi_prep.r1_length_vdj
 //samples
 sample_id = params.cellranger_multi_prep.sample_id
-cmo_ids = params.cellranger_multi_prep.cmo_ids
 lane_of_sample_10x = params.cellranger_multi_prep.lane_of_sample_10x
+cmo_ids = params.cellranger_multi_prep.cmo_ids
+hashtag_ids = params.cellranger_multi_prep.hashtag_ids
+ocm_barcode_ids = params.cellranger_multi_prep.ocm_barcode_ids
+probe_barcode_ids = params.cellranger_multi_prep.probe_barcode_ids
 description = params.cellranger_multi_prep.description
 
 fastq_id2 = fastq_id.collect{ '"' + it + '"'}
@@ -202,13 +205,17 @@ physical_library_id2 = physical_library_id.collect{ '"' + it + '"'}
 feature_types2 = feature_types.collect{ '"' + it + '"'}
 sample_id2 = sample_id.collect{ '"' + it + '"'}
 cmo_ids2 = cmo_ids.collect{ '"' + it + '"'}
+hashtag_ids2 = hashtag_ids.collect{ '"' + it + '"'}
+ocm_barcode_ids2 = ocm_barcode_ids.collect{ '"' + it + '"'}
+probe_barcode_ids2 = probe_barcode_ids.collect{ '"' + it + '"'}
+
 lane_of_sample2 = []
 if (lane_of_sample_10x instanceof List) {
 	lane_of_sample2 = lane_of_sample_10x.collect{ '"' + it + '"'}	
 } 
 description2 = description.collect{ '"' + it + '"'}
 
-//* @style @spreadsheet:{fastq_id,lanes_10x,physical_library_id,feature_types},{sample_id,cmo_ids,lane_of_sample_10x,description} 
+//* @style @spreadsheet:{fastq_id,lanes_10x,physical_library_id,feature_types},{sample_id,lane_of_sample_10x,cmo_ids,hashtag_ids,ocm_barcode_ids,probe_barcode_ids,description} 
 
 process cellranger_multi_prep {
 
@@ -410,10 +417,13 @@ input:
  path reads
 
 output:
- path "allreads/*/*_{R1,R2}_001.fastq.gz", includeInputs: true   ,emit:g_33_reads00_g_34 
- val "single"  ,emit:g_33_mate10_g_35 
+ val "single"  ,emit:g_33_mate00_g_35 
+ path "allreads/*/*_{R1,R2}_001.fastq.gz", includeInputs: true   ,emit:g_33_reads10_g_34 
 
 stageInMode 'copy'
+disk { 1000.GB * task.attempt }
+errorStrategy 'retry'
+maxRetries 2
 
 when:
 (params.run_FastQC && (params.run_FastQC == "yes"))
@@ -475,6 +485,10 @@ mv ${reads} reads/.
 }
 
 //* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 1
+    $MEMORY = 24
+}
 //* platform
 //* platform
 //* autofill
@@ -487,14 +501,19 @@ input:
 
 output:
  path "multiqc_report.html" ,optional:true  ,emit:g_52_outputHTML00 
+ path "*" ,optional:true  ,emit:g_52_outputDir11 
 
-errorStrategy 'ignore'
+container 'quay.io/biocontainers/multiqc:1.25.2--pyhdfd78af_0'
 
 script:
 multiqc_parameters = params.MultiQC.multiqc_parameters
+plots_flat_numseries = params.MultiQC.plots_flat_numseries
+
 """
-multiqc ${multiqc_parameters} -e general_stats -d -dd 2 .
+multiqc ${multiqc_parameters}  -d -dd 2 --cl-config "plots_flat_numseries: ${plots_flat_numseries}" .
+
 """
+
 
 }
 
@@ -976,6 +995,7 @@ process cellranger_multi {
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${run_id}_outs$/) "multi/$filename"}
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*_web_summary.html$/) "cellranger_report/$filename"}
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /final_${config}$/) "multi/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*filtered_contig_annotations.csv$/) "cellranger_vdj_reports/$filename"}
 input:
  path reads
  path ref
@@ -992,6 +1012,7 @@ output:
  path "*_web_summary.html"  ,emit:g_20_outputHTML11 
  path "final_${config}"  ,emit:g_20_csvFile22 
  path "run_bamtofastq" ,optional:true  ,emit:g_20_runFile30_g_54 
+ path "*filtered_contig_annotations.csv" ,optional:true  ,emit:g_20_csvFile44 
 
 when:
 (params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi
@@ -1017,6 +1038,7 @@ import glob
 def is_not_blank(s):
 	return bool(s and not s.isspace() and s != "null" and not s.startswith('NO_FILE'))
 
+# These variables are defined in cellranger_multi_prep -> advanced tab -> Header Script section
 bcl_directory = ${bcl_directory2}
 fastq_id = ${fastq_id2}
 lanes10x = ${lanes_10x2}
@@ -1024,8 +1046,39 @@ physical_library_id = ${physical_library_id2}
 feature_types = ${feature_types2}
 sample_id = ${sample_id2}
 cmo_ids = ${cmo_ids2} 
+hashtag_ids = ${hashtag_ids2} 
+ocm_barcode_ids = ${ocm_barcode_ids2} 
+probe_barcode_ids = ${probe_barcode_ids2} 
 lane_of_samples = ${lane_of_sample2}
 description = ${description2}
+
+
+def is_nonempty_string_or_array(variable):
+    if isinstance(variable, str):
+        # Check if the string is not empty after stripping whitespace
+        return variable.strip() != ""
+    elif isinstance(variable, (list, tuple)):
+        # Check if it's not empty AND at least one element is nonempty
+        return len(variable) > 0 and any(str(item).strip() != "" for item in variable)
+    else:
+        # If it's neither a string nor a list/tuple, decide how to handle
+        # For this example, we'll return False
+        return False
+
+# We can only use one of them in [samples] section, so check which one has the value 
+optional_columns = [
+    ("cmo_ids", cmo_ids),
+    ("hashtag_ids", hashtag_ids),
+    ("ocm_barcode_ids", ocm_barcode_ids),
+    ("probe_barcode_ids", probe_barcode_ids),
+]
+
+nonempty_columns = [(name, col_data) for name, col_data in optional_columns if is_nonempty_string_or_array(col_data)]
+
+# Check that only one optional column is nonempty
+if len(nonempty_columns) > 1:
+    raise ValueError("You can only use one of the following columns in [samples] section: cmo_ids, hashtag_ids, ocm_barcode_ids, probe_barcode_ids")
+
 
 # if feature_types both VDJ-T and Multiplexing Capture then first run demultiplexing
 demultiplexing = False
@@ -1082,12 +1135,12 @@ with open(r'final_${config}', 'a') as f:
 							if (demultiplexing == False or (demultiplexing == True and feature_types[i] != "VDJ-T")):
 								w.writerow([fastq_id[i],bcl_path,physical_library_id[i],feature_types[i]])
 
-	if sample_id: 
+	if is_nonempty_string_or_array(sample_id): 
 		w.writerow(["[samples]"])
-		w.writerow(["sample_id","cmo_ids","description"])
+		w.writerow(["sample_id", nonempty_columns[0][0], "description"])
 		for i in range(len(sample_id)):
 			if (lane_of_samples[i] == "any" or lane_of_samples[i] == "") or (unique_lane_id == lane_of_samples[i]) :
-				w.writerow([sample_id[i],cmo_ids[i],description[i]])
+				w.writerow([sample_id[i],nonempty_columns[0][1][i],description[i]])
 				
 print("## Config File:")
 with open('final_${config}', 'r') as f:
@@ -1112,7 +1165,18 @@ if demultiplexing == True:
 	
 subprocess.run("mv ${run_id}/outs "+prefix+"${run_id}_outs && rm -rf ${run_id}", shell=True, check=True)
 subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp "+prefix+"${run_id}_outs/per_sample_outs/\${i}/web_summary.html "+prefix+"lane10x_${config_id}_\${i}_web_summary.html; done", shell=True, check=True)
-
+try:
+	subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp "+prefix+"${run_id}_outs/per_sample_outs/\${i}/vdj_b/filtered_contig_annotations.csv "+prefix+"lane10x_${config_id}_\${i}_vdj_b_filtered_contig_annotations.csv; done", shell=True, check=True)
+except subprocess.CalledProcessError:
+	print("INFO: vdj_b/filtered_contig_annotations.csv was not found to publish it to report tab.")
+try:
+	subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp "+prefix+"${run_id}_outs/per_sample_outs/\${i}/vdj_t/filtered_contig_annotations.csv "+prefix+"lane10x_${config_id}_\${i}_vdj_t_filtered_contig_annotations.csv; done", shell=True, check=True)
+except subprocess.CalledProcessError:
+	print("INFO: vdj_t/filtered_contig_annotations.csv was not found to publish it to report tab.")
+try:
+	subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp "+prefix+"${run_id}_outs/per_sample_outs/\${i}/vdj_t_gd/filtered_contig_annotations.csv "+prefix+"lane10x_${config_id}_\${i}_vdj_t_gd_filtered_contig_annotations.csv; done", shell=True, check=True)
+except subprocess.CalledProcessError:
+	print("INFO: vdj_t_gd/filtered_contig_annotations.csv was not found to publish it to report tab.")
 
 
 """
@@ -3084,12 +3148,12 @@ workflow {
 mkfastq_prep()
 g_4_bcl00_g_0 = mkfastq_prep.out.g_4_bcl00_g_0
 g_4_bcl_directory13_g_13 = mkfastq_prep.out.g_4_bcl_directory13_g_13
-(g_4_bcl_directory16_g_20,g_4_bcl_directory15_g_55) = [g_4_bcl_directory13_g_13,g_4_bcl_directory13_g_13]
+(g_4_bcl_directory15_g_55,g_4_bcl_directory16_g_20) = [g_4_bcl_directory13_g_13,g_4_bcl_directory13_g_13]
 
 
 mkfastq(g_4_bcl00_g_0.flatten())
-g_0_reads00_g_33 = mkfastq.out.g_0_reads00_g_33
-(g_0_reads00_g_13,g_0_reads00_g_20) = [g_0_reads00_g_33,g_0_reads00_g_33]
+g_0_reads00_g_13 = mkfastq.out.g_0_reads00_g_13
+(g_0_reads00_g_20,g_0_reads00_g_33) = [g_0_reads00_g_13,g_0_reads00_g_13]
 g_0_outputDir11 = mkfastq.out.g_0_outputDir11
 g_0_outputHTML22 = mkfastq.out.g_0_outputHTML22
 
@@ -3104,9 +3168,9 @@ g_22_reads00_g_25 = cellranger_fastq_prep.out.g_22_reads00_g_25
 
 cellranger_fastq_collect(g_22_reads00_g_25.collect())
 g_25_bcl_directory05_g_13 = cellranger_fastq_collect.out.g_25_bcl_directory05_g_13
-(g_25_bcl_directory07_g_20,g_25_bcl_directory07_g_55) = [g_25_bcl_directory05_g_13,g_25_bcl_directory05_g_13]
+(g_25_bcl_directory07_g_55,g_25_bcl_directory07_g_20) = [g_25_bcl_directory05_g_13,g_25_bcl_directory05_g_13]
 g_25_reads16_g_13 = cellranger_fastq_collect.out.g_25_reads16_g_13
-(g_25_reads18_g_20,g_25_reads10_g_55) = [g_25_reads16_g_13,g_25_reads16_g_13]
+(g_25_reads10_g_55,g_25_reads18_g_20) = [g_25_reads16_g_13,g_25_reads16_g_13]
 
 
 cellranger_count_prep()
@@ -3114,17 +3178,17 @@ g_27_csvFile04_g_13 = cellranger_count_prep.out.g_27_csvFile04_g_13
 
 
 if (!((params.run_FastQC && (params.run_FastQC == "yes")))){
-g_0_reads00_g_33.set{g_33_reads00_g_34}
-g_33_mate10_g_35 = Channel.empty()
+g_0_reads00_g_33.set{g_33_reads10_g_34}
+g_33_mate00_g_35 = Channel.empty()
 } else {
 
 flatten_cellranger_reads(g_0_reads00_g_33.collect())
-g_33_reads00_g_34 = flatten_cellranger_reads.out.g_33_reads00_g_34
-g_33_mate10_g_35 = flatten_cellranger_reads.out.g_33_mate10_g_35
+g_33_mate00_g_35 = flatten_cellranger_reads.out.g_33_mate00_g_35
+g_33_reads10_g_34 = flatten_cellranger_reads.out.g_33_reads10_g_34
 }
 
 
-file_to_set_conversion_for_reads(g_33_reads00_g_34.flatten())
+file_to_set_conversion_for_reads(g_33_reads10_g_34.flatten())
 g_34_reads01_g_35 = file_to_set_conversion_for_reads.out.g_34_reads01_g_35
 
 
@@ -3133,7 +3197,7 @@ g_34_reads01_g_35.set{g_35_reads11}
 g_35_FastQCout04_g_52 = Channel.empty()
 } else {
 
-FastQC_after_mkfastq(g_33_mate10_g_35,g_34_reads01_g_35)
+FastQC_after_mkfastq(g_33_mate00_g_35,g_34_reads01_g_35)
 g_35_FastQCout04_g_52 = FastQC_after_mkfastq.out.g_35_FastQCout04_g_52
 g_35_reads11 = FastQC_after_mkfastq.out.g_35_reads11
 }
@@ -3141,6 +3205,7 @@ g_35_reads11 = FastQC_after_mkfastq.out.g_35_reads11
 
 MultiQC(g_35_FastQCout04_g_52.flatten().toList())
 g_52_outputHTML00 = MultiQC.out.g_52_outputHTML00
+g_52_outputDir11 = MultiQC.out.g_52_outputDir11
 
 
 Check_and_Build_Module_Check_Genome_GTF()
@@ -3201,7 +3266,7 @@ g_7_reference00_g_18= g_7_reference00_g_18.ifEmpty(ch_empty_file_1)
 
 cellranger_ref_checker(g_7_reference00_g_18)
 g_18_reference01_g_13 = cellranger_ref_checker.out.g_18_reference01_g_13
-(g_18_reference01_g_20,g_18_reference01_g_55) = [g_18_reference01_g_13,g_18_reference01_g_13]
+(g_18_reference01_g_55,g_18_reference01_g_20) = [g_18_reference01_g_13,g_18_reference01_g_13]
 
 g_0_reads00_g_20= g_0_reads00_g_20.ifEmpty(ch_empty_file_1) 
 g_4_bcl_directory16_g_20= g_4_bcl_directory16_g_20.ifEmpty("") 
@@ -3223,6 +3288,7 @@ g_20_outputDir01_g_54 = cellranger_multi.out.g_20_outputDir01_g_54
 g_20_outputHTML11 = cellranger_multi.out.g_20_outputHTML11
 g_20_csvFile22 = cellranger_multi.out.g_20_csvFile22
 g_20_runFile30_g_54 = cellranger_multi.out.g_20_runFile30_g_54
+g_20_csvFile44 = cellranger_multi.out.g_20_csvFile44
 }
 
 

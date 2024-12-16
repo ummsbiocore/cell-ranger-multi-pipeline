@@ -1,4 +1,4 @@
-Cell Ranger (v8.0.1) is a set of analysis pipelines that process Chromium single-cell RNA-seq output to align reads, generate feature-barcode matrices and perform clustering and gene expression analysis. 
+Cell Ranger (v9.0.0) is a set of analysis pipelines that process Chromium single-cell RNA-seq output to align reads, generate feature-barcode matrices and perform clustering and gene expression analysis. 
 
 Steps:
   1. The cellranger mkfastq demultiplexes the Illumina sequencer's base call files (BCLs) for each flow cell directory into FASTQ files. 
