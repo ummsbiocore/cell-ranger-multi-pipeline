@@ -4,12 +4,12 @@ params.outdir = 'results'
 params.publishdict = [:]
 
 def pathChecker(input, path, type){
-	cmd = "mkdir -p check && mv ${input} check/. "
+	def cmd = "mkdir -p check && mv ${input} check/. "
 	if (!input || input.empty()){
 		input = file(path).getName().toString()
 		cmd = "mkdir -p check && cd check && ln -s ${path} ${input} && cd .."
 		if (path.indexOf('s3:') > -1 || path.indexOf('S3:') >-1){
-			recursive = (type == "folder") ? "--recursive" : ""
+			def recursive = (type == "folder") ? "--recursive" : ""
 			cmd = "mkdir -p check && cd check && aws s3 cp ${recursive} ${path} ${workDir}/${input} && ln -s ${workDir}/${input} . && cd .."
 		} else if (path.indexOf('gs:') > -1 || path.indexOf('GS:') >-1){
 			if (type == "folder"){
