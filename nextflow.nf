@@ -9,7 +9,7 @@ def pathChecker(input, path, type){
 		input = file(path).getName().toString()
 		cmd = "mkdir -p check && cd check && ln -s ${path} ${input} && cd .."
 		if (path.indexOf('s3:') > -1 || path.indexOf('S3:') >-1){
-			def recursive = (type == "folder") ? "--recursive" : ""
+			recursive = (type == "folder") ? "--recursive" : ""
 			cmd = "mkdir -p check && cd check && aws s3 cp ${recursive} ${path} ${workDir}/${input} && ln -s ${workDir}/${input} . && cd .."
 		} else if (path.indexOf('gs:') > -1 || path.indexOf('GS:') >-1){
 			if (type == "folder"){
@@ -26,7 +26,6 @@ def pathChecker(input, path, type){
 if (!params.cmo_set){params.cmo_set = ""} 
 if (!params.feature_reference){params.feature_reference = ""} 
 if (!params.VDJ_reference){params.VDJ_reference = ""} 
-if (!params.feature_ref){params.feature_ref = ""} 
 if (!params.reads){params.reads = ""} 
 if (!params.mate){params.mate = ""} 
 if (!params.custom_additional_genome){params.custom_additional_genome = ""} 
@@ -40,13 +39,9 @@ ch_empty_file_5 = file("$baseDir/.emptyfiles/NO_FILE_5", hidden:true)
 ch_empty_file_6 = file("$baseDir/.emptyfiles/NO_FILE_6", hidden:true)
 ch_empty_file_7 = file("$baseDir/.emptyfiles/NO_FILE_7", hidden:true)
 
-g_10_4_g_55 = params.cmo_set && file(params.cmo_set, type: 'any').exists() ? file(params.cmo_set, type: 'any') : ch_empty_file_4
 g_10_4_g_20 = params.cmo_set && file(params.cmo_set, type: 'any').exists() ? file(params.cmo_set, type: 'any') : ch_empty_file_4
-g_11_2_g_55 = params.feature_reference && file(params.feature_reference, type: 'any').exists() ? file(params.feature_reference, type: 'any') : ch_empty_file_2
 g_11_2_g_20 = params.feature_reference && file(params.feature_reference, type: 'any').exists() ? file(params.feature_reference, type: 'any') : ch_empty_file_2
-g_12_3_g_55 = params.VDJ_reference && file(params.VDJ_reference, type: 'any').exists() ? file(params.VDJ_reference, type: 'any') : ch_empty_file_3
 g_12_3_g_20 = params.VDJ_reference && file(params.VDJ_reference, type: 'any').exists() ? file(params.VDJ_reference, type: 'any') : ch_empty_file_3
-g_17_2_g_13 = params.feature_ref && file(params.feature_ref, type: 'any').exists() ? file(params.feature_ref, type: 'any') : ch_empty_file_2
 if (params.reads){
 Channel
 	.fromFilePairs( params.reads,checkExists:true , size: params.mate == "single" ? 1 : params.mate == "pair" ? 2 : params.mate == "triple" ? 3 : params.mate == "quadruple" ? 4 : -1 ) 
@@ -67,7 +62,7 @@ process mkfastq_prep {
 
 output:
  path "*"  ,emit:g_4_bcl00_g_0 
- val bcl_directory  ,emit:g_4_bcl_directory13_g_13 
+ val bcl_directory  ,emit:g_4_bcl_directory16_g_20 
 
 container 'quay.io/viascientific/pipeline_base_image:1.0'
 
@@ -150,7 +145,7 @@ input:
  path bcl_files
 
 output:
- path "${bcl_files}_fastq"  ,emit:g_0_reads00_g_13 
+ path "${bcl_files}_fastq"  ,emit:g_0_reads00_g_33 
  path "${bcl_files}_reports"  ,emit:g_0_outputDir11 
  path "${bcl_files}_laneBarcode.html" ,optional:true  ,emit:g_0_outputHTML22 
 
@@ -322,8 +317,8 @@ input:
  path reads
 
 output:
- val bcl_directory  ,emit:g_25_bcl_directory05_g_13 
- path "reads_fastq"  ,emit:g_25_reads16_g_13 
+ val bcl_directory  ,emit:g_25_bcl_directory07_g_20 
+ path "reads_fastq"  ,emit:g_25_reads18_g_20 
 
 disk { 1000.GB * task.attempt }
 errorStrategy 'retry'
@@ -335,79 +330,6 @@ bcl_directory = ["/reads"]
 mkdir reads_fastq
 mv $reads reads_fastq/.
 """
-}
-
-//* params.feature_ref =  ""  //* @input  @optional @single_file @description:"Feature reference CSV file, optional."
-
-//libraries
-sample = params.cellranger_count_prep.sample
-lane_of_library = params.cellranger_count_prep.lane_of_library
-library_types = params.cellranger_count_prep.library_types
-//gene-expression
-cellranger_count_create_bam = params.cellranger_count_prep.cellranger_count_create_bam
-cellranger_count_expect_cells = params.cellranger_count_prep.cellranger_count_expect_cells
-cellranger_count_r1_length = params.cellranger_count_prep.cellranger_count_r1_length
-cellranger_count_chemistry = params.cellranger_count_prep.cellranger_count_chemistry
-cellranger_count_parameters = params.cellranger_count_prep.cellranger_count_parameters
-
-sample2 = sample.collect{ '"' + it + '"'}
-lane_of_library2 = lane_of_library.collect{ '"' + it + '"'}
-library_types2 = library_types.collect{ '"' + it + '"'}
-//* @style @spreadsheet:{sample,lane_of_library,library_types}
-
-//* autofill
-if ($HOSTNAME == "default"){
-    $CPU  = 4
-    $MEMORY = 100
-}
-//* platform
-//* platform
-//* autofill
-
-process cellranger_count_prep {
-
-
-output:
- path "*.csv"  ,emit:g_27_csvFile04_g_13 
-
-when:
-(params.run_cellranger_count && (params.run_cellranger_count == "yes")) || !params.run_cellranger_count
-
-script:
-
-"""
-#!/usr/bin/env python
-
-import subprocess
-import csv  
-
-def is_not_blank(s):
-	return bool(s and not s.isspace() and s != "null" and not s.startswith('NO_FILE'))
-
-# Group config files by using lanes:
-all_lanes = ${lane_of_library2}
-unique_lanes = list(set(all_lanes))
-print(unique_lanes)
-# remove "" from list if it has "any" in it
-if '' in unique_lanes :
-	unique_lanes.remove('')
-	if 'any' not in unique_lanes :
-		unique_lanes.append("any")
-
-# if unique_lanes has "any" and it has more than 1 lanes then remove "any"
-# other lanes will use "any"
-if (len(unique_lanes) > 1) and ('any' in unique_lanes):
-	unique_lanes.remove('any')
-	
-print(unique_lanes)
-
-for l in range(len(unique_lanes)):
-	f = open('config_'+unique_lanes[l]+'.csv', "w")
-
-
-"""
-
-
 }
 
 
@@ -967,7 +889,7 @@ input:
  path transcriptome
 
 output:
- path "*/${transcriptome}" ,optional:true  ,emit:g_18_reference01_g_13 
+ path "*/${transcriptome}" ,optional:true  ,emit:g_18_reference01_g_20 
 
 container 'quay.io/viascientific/pipeline_base_image:1.0'
 stageInMode 'copy'
@@ -995,7 +917,6 @@ process cellranger_multi {
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${run_id}_outs$/) "multi/$filename"}
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*_web_summary.html$/) "cellranger_report/$filename"}
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /final_${config}$/) "multi/$filename"}
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*filtered_contig_annotations.csv$/) "cellranger_vdj_reports/$filename"}
 input:
  path reads
  path ref
@@ -1008,11 +929,10 @@ input:
  path fastq_start_reads
 
 output:
- path "${run_id}_outs"  ,emit:g_20_outputDir01_g_54 
+ path "${run_id}_outs"  ,emit:g_20_outputDir00_g_59 
  path "*_web_summary.html"  ,emit:g_20_outputHTML11 
  path "final_${config}"  ,emit:g_20_csvFile22 
- path "run_bamtofastq" ,optional:true  ,emit:g_20_runFile30_g_54 
- path "*filtered_contig_annotations.csv" ,optional:true  ,emit:g_20_csvFile44 
+ path "*filtered_contig_annotations.csv" ,optional:true  ,emit:g_20_csvFile33 
 
 when:
 (params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi
@@ -1079,12 +999,6 @@ nonempty_columns = [(name, col_data) for name, col_data in optional_columns if i
 if len(nonempty_columns) > 1:
     raise ValueError("You can only use one of the following columns in [samples] section: cmo_ids, hashtag_ids, ocm_barcode_ids, probe_barcode_ids")
 
-
-# if feature_types both VDJ-T and Multiplexing Capture then first run demultiplexing
-demultiplexing = False
-if 'VDJ-T' in feature_types and 'Multiplexing Capture' in feature_types:
-	demultiplexing = True
-
 unique_lane_id = "${config_id}"
 
 with open(r'final_${config}', 'a') as f:
@@ -1132,8 +1046,7 @@ with open(r'final_${config}', 'a') as f:
 							bcl_path = os.path.abspath(root)
 							print("directory: "+bcl_path)
 							print(glob.glob(os.path.join(root, fastq_id[i] + "*")))
-							if (demultiplexing == False or (demultiplexing == True and feature_types[i] != "VDJ-T")):
-								w.writerow([fastq_id[i],bcl_path,physical_library_id[i],feature_types[i]])
+							w.writerow([fastq_id[i],bcl_path,physical_library_id[i],feature_types[i]])
 
 	if is_nonempty_string_or_array(sample_id): 
 		w.writerow(["[samples]"])
@@ -1157,11 +1070,6 @@ if p.returncode != 0:
 	sys.exit(p.returncode)
 
 prefix = ""
-if demultiplexing == True:
-	subprocess.run("touch run_bamtofastq", shell=True, check=True)
-	prefix = "demultiplexing_"
-	subprocess.run("mv final_${config} demultiplexing_final_${config}", shell=True, check=True)
-	subprocess.run("cp ${config} ${run_id}/outs/.", shell=True, check=True)
 	
 subprocess.run("mv ${run_id}/outs "+prefix+"${run_id}_outs && rm -rf ${run_id}", shell=True, check=True)
 subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp "+prefix+"${run_id}_outs/per_sample_outs/\${i}/web_summary.html "+prefix+"lane10x_${config_id}_\${i}_web_summary.html; done", shell=True, check=True)
@@ -1226,301 +1134,9 @@ fi
 }
 
 
-process bamtofastq_10x {
-
-input:
- path run_bamtofastq
- path demultiplexed_folders
-
-output:
- tuple file("config_*"), file("bamtofastq_filtered/*")  ,emit:g_54_config_reads06_g_55 
-
-script:
-"""
-for i in \$(ls ${demultiplexed_folders}/per_sample_outs); do mkdir -p bamtofastq && bamtofastq --reads-per-fastq=2200000000 ${demultiplexed_folders}/per_sample_outs/\${i}/count/sample_alignments.bam bamtofastq/\${i}; done
-cp ${demultiplexed_folders}/config_* .
-mkdir -p bamtofastq_filtered
-for i in \$(ls ${demultiplexed_folders}/per_sample_outs); do
-	string=\$(samtools view -H ${demultiplexed_folders}/per_sample_outs/\${i}/count/sample_alignments.bam | grep "Gene Expression")
-	gexid=\$(echo \${string#*library_id\\":} |cut -d ','  -f1)
-	# demultiplexed_folders-> demultiplexing_run_12_outs
-	foldername="${demultiplexed_folders}"
-	a=\$(echo \${foldername#*demultiplexing_}) ##run_12_outs
-	runid=\$(echo \${a%*_outs})  ##run_12
-	echo "runid: \${runid}"
-	echo "gexid: \${gexid}"
-	mkdir -p bamtofastq_filtered/\${i}
-	mv bamtofastq/\${i}/\${runid}_\${gexid}_*  bamtofastq_filtered/\${i}
-done
-
-"""
-}
-
-//* autofill
-if ($HOSTNAME == "default"){
-    $CPU  = 16
-    $MEMORY = 128
-}
-//* platform
-//* platform
-//* autofill
-
-
-
-process cellranger_multi_after_demultiplexing {
-
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*${run_id}_outs$/) "multi/$filename"}
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*_web_summary.html$/) "cellranger_report/$filename"}
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*final_${config}$/) "multi/$filename"}
-input:
- path reads
- path ref
- path feature_reference
- path VDJ_reference
- path cmo_set
- val bcl_directory
- tuple file(config), file(bamtofastq)
- val fastq_start_directory
-
-output:
- path "*${run_id}_outs"  ,emit:g_55_outputDir00 
- path "*_web_summary.html"  ,emit:g_55_outputHTML11 
- path "*final_${config}"  ,emit:g_55_csvFile22 
-
-when:
-(params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi
-
-script:
-config_id = config.toString().replace(".csv","").replace("config_","")
-run_id = bamtofastq+"_run_"+config_id
-bcl_directory2 = ""
-if (bcl_directory){
-	bcl_directory2 = bcl_directory.collect{ '"' + it + '"'}
-} else if (fastq_start_directory){
-	bcl_directory2 = fastq_start_directory.collect{ '"' + it + '"'}
-}
-
-
-"""
-#!/usr/bin/env python
-
-import subprocess,sys
-import csv,os  
-import glob
-
-def is_not_blank(s):
-	return bool(s and not s.isspace() and s != "null" and not s.startswith('NO_FILE'))
-
-bcl_directory = ${bcl_directory2}
-fastq_id = ${fastq_id2}
-lanes10x = ${lanes_10x2}
-physical_library_id = ${physical_library_id2}	
-feature_types = ${feature_types2}
-sample_id = ${sample_id2}
-cmo_ids = ${cmo_ids2} 
-lane_of_samples = ${lane_of_sample2}
-description = ${description2}
-
-
-unique_lane_id = "${config_id}"
-
-with open(r'${bamtofastq}_final_${config}', 'a') as f:
-	w = csv.writer(f)
-	w.writerow(["[gene-expression]"])
-	ref_path = os.path.abspath("${ref}")
-	w.writerow(["reference",ref_path])
-	w.writerow(["check-library-compatibility","false"])
-	if is_not_blank("${cmo_set}") and ("${cmo_set}" != "NA"):
-		cmo_path = os.path.abspath("${cmo_set}")
-		w.writerow(["cmo-set",cmo_path])
-	if is_not_blank("${expect_cells}"):
-		w.writerow(["expect-cells","${expect_cells}"])
-	if is_not_blank("${cellranger_multi_chemistry}"):
-		w.writerow(["chemistry","${cellranger_multi_chemistry}"])
-	if is_not_blank("${r1_length}"):
-		w.writerow(["r1-length","${r1_length}"])
-	if is_not_blank("${include_introns}"):
-		w.writerow(["include-introns","${include_introns}"])
-	if is_not_blank("${create_bam}"):
-		w.writerow(["create-bam","${create_bam}"])
-	if (is_not_blank("${feature_reference}") and ("${feature_reference}" != "NA")) or is_not_blank("${r1_length_feature}"):
-		w.writerow(["[feature]"])
-		if is_not_blank("${feature_reference}") and ("${feature_reference}" != "NA"):
-			feature_reference_path = os.path.abspath("${feature_reference}")
-			w.writerow(["reference",feature_reference_path])
-		if is_not_blank("${r1_length_feature}"):
-			w.writerow(["r1-length","${r1_length_feature}"])
-	if is_not_blank("${VDJ_reference}") and ("${VDJ_reference}" != "NA"):
-		w.writerow(["[vdj]"])
-		vdj_path = os.path.abspath("${VDJ_reference}")
-		w.writerow(["reference",vdj_path])
-		if is_not_blank("${r1_length_vdj}"):
-			w.writerow(["r1-length","${r1_length_vdj}"])
-
-	if fastq_id:
-		w.writerow(["[libraries]"])
-		w.writerow(["fastq_id","fastqs","physical_library_id","feature_types"])
-		
-		## To Support multiple recursive directories
-		for path, currentDirectory, files in os.walk("${bamtofastq}"):
-			if any(file.startswith("bamtofastq") for file in files):
-				cur_path = os.path.abspath(".")
-				w.writerow(["bamtofastq",cur_path+"/"+path,"","Gene Expression"])
-		for i in range(len(fastq_id)):
-			if (lanes10x[i] == "any" or lanes10x[i] == "") or (unique_lane_id == lanes10x[i]) :
-				for b in range(len(bcl_directory)):
-					bcl_name = bcl_directory[b].rstrip('/').rsplit('/', 1)[1]
-					print(bcl_name)
-					if any(fname.startswith(fastq_id[i]) for fname in os.listdir(bcl_name+"_fastq")):
-						bcl_path = os.path.abspath(bcl_name+"_fastq")
-						print("directory: "+bcl_path)
-						print(glob.glob(bcl_name+"_fastq/"+fastq_id[i]+"*"))
-						if (feature_types[i] != "Multiplexing Capture"  and feature_types[i] != "Gene Expression"):
-							w.writerow([fastq_id[i],bcl_path,physical_library_id[i],feature_types[i]])
-
-				
-print("## Config File:")
-with open('${bamtofastq}_final_${config}', 'r') as f:
-	print(f.read())
-    
-cmd = ["cellranger","multi","--id=${run_id}","--csv=${bamtofastq}_final_${config}","--localcores=16","--localmem=120"]
-print(cmd)
-
-p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-stdout, stderr = p.communicate()
-print(stdout.decode())
-print(stderr.decode())
-if p.returncode != 0:
-	sys.exit(p.returncode)
-
-prefix = ""
-subprocess.run("mv ${run_id}/outs "+prefix+"${run_id}_outs && rm -rf ${run_id}", shell=True, check=True)
-subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp "+prefix+"${run_id}_outs/per_sample_outs/\${i}/web_summary.html "+prefix+"lane10x_${config_id}_\${i}_web_summary.html; done", shell=True, check=True)
-
-
-
-"""
-
-
-}
-
-//* @style @array:{sample,library_types} @multicolumn:{sample,library_types}
-
-//* autofill
-if ($HOSTNAME == "default"){
-    $CPU  = 16
-    $MEMORY = 120
-}
-//* platform
-//* platform
-//* autofill
-
-process cellranger_count {
-
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${run_id}_outs$/) "count/$filename"}
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${run_id}_web_summary.html$/) "cellranger_report/$filename"}
-input:
- path reads
- path ref
- path feature_ref
- val bcl_directory
- path config
- val fastq_start_directory
- path fastq_start_reads
-
-output:
- path "${run_id}_outs"  ,emit:g_13_outputDir00 
- path "${run_id}_web_summary.html"  ,emit:g_13_outputHTML11 
- path "${run_id}_raw_feature_bc_matrix.h5"  ,emit:g_13_h5_file22 
- path "${run_id}_filtered_feature_bc_matrix.h5"  ,emit:g_13_h5_file30_g_60 
-
-when:
-(params.run_cellranger_count && (params.run_cellranger_count == "yes")) || !params.run_cellranger_count
-
-script:
-
-config_id = config.toString().replace(".csv","").replace("config_","")
-run_id = "run_"+config_id
-bcl_directory2 = ""
-if (bcl_directory){
-	bcl_directory2 = bcl_directory.collect{ '"' + it + '"'}
-} else if (fastq_start_directory){
-	bcl_directory2 = fastq_start_directory.collect{ '"' + it + '"'}
-}
-
-"""
-#!/usr/bin/env python
-
-import subprocess
-import csv  
-import os
-import sys
-import glob
-
-def is_not_blank(s):
-	return bool(s and not s.isspace() and s != "null" and not s.startswith('NO_FILE'))
-
-sample = ${sample2}
-bcl_directory = ${bcl_directory2}
-lane_of_library = ${lane_of_library2}
-library_types = ${library_types2}
-feature_reference_text = "--feature-ref=${feature_ref}" if is_not_blank("${feature_ref}") else ""
-expect_cells_text = "--expect-cells=${cellranger_count_expect_cells}" if is_not_blank("${cellranger_count_expect_cells}") else ""
-r1_length_text = "--r1-length=${cellranger_count_r1_length}" if is_not_blank("${cellranger_count_r1_length}") else ""
-
-unique_lane_id = "${config_id}"
-print("## All Files:")
-for f in glob.glob('**/*', recursive=True):
-	print(f)
-
-with open(r'final_${config}', 'a') as f:
-	w = csv.writer(f)
-	if sample:
-		w.writerow(["fastqs","sample","library_type"])
-		for i in range(len(sample)):
-			if (lane_of_library[i] == "any" or lane_of_library[i] == "") or (unique_lane_id == lane_of_library[i]) :
-				for b in range(len(bcl_directory)):
-					bcl_name = bcl_directory[b].rstrip('/').rsplit('/', 1)[1]
-					## To Support multiple recursive directories
-					for path, currentDirectory, files in os.walk(bcl_name+"_fastq"):
-						if any(file.startswith(sample[i]+"_S") for file in files):
-							cur_path = os.path.abspath(".")
-							w.writerow([cur_path+"/"+path,sample[i].strip(),library_types[i]])
-					# if any(fname.startswith(sample[i]) for fname in os.listdir(bcl_name+"_fastq")):
-					# 	bcl_path = os.path.abspath(bcl_name+"_fastq")
-					# 	w.writerow([bcl_path,sample[i],library_types[i]])
-
-print("## Config File:")
-with open('final_${config}', 'r') as f:
-	print(f.read())
-
-cmd = "cellranger count --localcores=16 --localmem=120 ${cellranger_count_parameters} --id=${run_id} --create-bam=${cellranger_count_create_bam} --chemistry=${cellranger_count_chemistry} --libraries=final_${config} --transcriptome=${ref}"+" "+r1_length_text+" "+feature_reference_text+ " "+ expect_cells_text
-print(cmd)
-
-p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-stdout, stderr = p.communicate()
-print(stdout.decode())
-print(stderr.decode())
-if p.returncode != 0:
-	sys.exit(p.returncode)
-
-subprocess.run("mv ${run_id}/outs ${run_id}_outs && rm -rf ${run_id}", shell=True, check=True)
-subprocess.run("cp ${run_id}_outs/web_summary.html ${run_id}_web_summary.html", shell=True, check=True)
-subprocess.run("cp ${run_id}_outs/*raw*.h5 ${run_id}_raw_feature_bc_matrix.h5", shell=True, check=True)
-subprocess.run("cp ${run_id}_outs/*filtered*.h5 ${run_id}_filtered_feature_bc_matrix.h5", shell=True, check=True)
-
-
-
-"""
-
-
-}
-
-
 process h5_channel_collector {
 
 input:
- path files1
  path files2
 
 output:
@@ -1824,7 +1440,7 @@ input:
 
 output:
  path "final_report.html"  ,emit:g51_19_outputHTML00 
- path "Final_Analysis.rds"  ,emit:g51_19_rdsFile10_g51_25 
+ path "Final_Analysis.rds"  ,emit:g51_19_rdsFile10_g51_22 
  path "*.tsv"  ,emit:g51_19_outFileTSV22 
 
 container "quay.io/viascientific/scrna_seurat:2.0"
@@ -1889,89 +1505,6 @@ Convert(paste0(seu_name,".h5Seurat"), dest = "h5ad")
 """
 
 
-}
-
-//* autofill
-if ($HOSTNAME == "default"){
-    $CPU  = 1
-    $MEMORY = 30
-}
-//* platform
-//* platform
-//* autofill
-
-process scRNA_Analysis_Module_seurat_to_sce {
-
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /sce_obj.rds$/) "Analysis_Apps/$filename"}
-input:
- path seurat_object
-
-output:
- path "sce_obj.rds"  ,emit:g51_25_rdsFile00_g51_27 
-
-label 'scrna_seurat'
-
-script:
-"""
-#!/usr/bin/env Rscript
-
-library(Seurat)
-library(SingleCellExperiment) 
-
-seurat = readRDS("${seurat_object}")
-
-sce = as.SingleCellExperiment(seurat)
-saveRDS(sce, file='sce_obj.rds')
-"""
-}
-
-
-process scRNA_Analysis_Module_launch_isee {
-
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /launch_iSEE.R$/) "Analysis_Apps/$filename"}
-input:
- path sce_object
-
-output:
- path 'launch_iSEE.R'  ,emit:g51_27_outputFileOut00 
-
-
-shell:
-
-'''
-#!/usr/bin/env perl
-
-my $script = <<'EOF';
-
-library(iSEE)
-
-getPath <- function() {
-    cmdArgs <- commandArgs(trailingOnly = FALSE)
-    needle <- "--file="
-    match <- grep(needle, cmdArgs)
-    if (length(match) > 0) {
-        path <- dirname(normalizePath(sub(needle, "", cmdArgs[match]))[1])
-        return(path)
-    } else {
-        return(normalizePath(getwd()))
-    }
-}
-
-path = normalizePath(paste0(getPath()))
-sce_file = "!{sce_object}"
-
-sce = readRDS(normalizePath(paste0(path, '/', sce_file)))
-app = iSEE(sce)
-options(shiny.host = "0.0.0.0", shiny.port = 8789)
-shiny::runApp(app)
-
-EOF
-
-open OUT, ">launch_iSEE.R";
-print OUT $script;
-close OUT;
-
-'''
 }
 
 //* autofill
@@ -2073,13 +1606,12 @@ workflow {
 
 mkfastq_prep()
 g_4_bcl00_g_0 = mkfastq_prep.out.g_4_bcl00_g_0
-g_4_bcl_directory13_g_13 = mkfastq_prep.out.g_4_bcl_directory13_g_13
-(g_4_bcl_directory15_g_55,g_4_bcl_directory16_g_20) = [g_4_bcl_directory13_g_13,g_4_bcl_directory13_g_13]
+g_4_bcl_directory16_g_20 = mkfastq_prep.out.g_4_bcl_directory16_g_20
 
 
 mkfastq(g_4_bcl00_g_0.flatten())
-g_0_reads00_g_13 = mkfastq.out.g_0_reads00_g_13
-(g_0_reads00_g_20,g_0_reads00_g_33) = [g_0_reads00_g_13,g_0_reads00_g_13]
+g_0_reads00_g_33 = mkfastq.out.g_0_reads00_g_33
+(g_0_reads00_g_20) = [g_0_reads00_g_33]
 g_0_outputDir11 = mkfastq.out.g_0_outputDir11
 g_0_outputHTML22 = mkfastq.out.g_0_outputHTML22
 
@@ -2093,14 +1625,8 @@ g_22_reads00_g_25 = cellranger_fastq_prep.out.g_22_reads00_g_25
 
 
 cellranger_fastq_collect(g_22_reads00_g_25.collect())
-g_25_bcl_directory05_g_13 = cellranger_fastq_collect.out.g_25_bcl_directory05_g_13
-(g_25_bcl_directory07_g_55,g_25_bcl_directory07_g_20) = [g_25_bcl_directory05_g_13,g_25_bcl_directory05_g_13]
-g_25_reads16_g_13 = cellranger_fastq_collect.out.g_25_reads16_g_13
-(g_25_reads10_g_55,g_25_reads18_g_20) = [g_25_reads16_g_13,g_25_reads16_g_13]
-
-
-cellranger_count_prep()
-g_27_csvFile04_g_13 = cellranger_count_prep.out.g_27_csvFile04_g_13
+g_25_bcl_directory07_g_20 = cellranger_fastq_collect.out.g_25_bcl_directory07_g_20
+g_25_reads18_g_20 = cellranger_fastq_collect.out.g_25_reads18_g_20
 
 
 if (!((params.run_FastQC && (params.run_FastQC == "yes")))){
@@ -2191,8 +1717,7 @@ g_7_reference00_g_18= g_7_reference00_g_18.ifEmpty(ch_empty_file_1)
 
 
 cellranger_ref_checker(g_7_reference00_g_18)
-g_18_reference01_g_13 = cellranger_ref_checker.out.g_18_reference01_g_13
-(g_18_reference01_g_55,g_18_reference01_g_20) = [g_18_reference01_g_13,g_18_reference01_g_13]
+g_18_reference01_g_20 = cellranger_ref_checker.out.g_18_reference01_g_20
 
 g_0_reads00_g_20= g_0_reads00_g_20.ifEmpty(ch_empty_file_1) 
 g_4_bcl_directory16_g_20= g_4_bcl_directory16_g_20.ifEmpty("") 
@@ -2202,56 +1727,25 @@ g_25_reads18_g_20= g_25_reads18_g_20.ifEmpty(ch_empty_file_7)
 
 if (!((params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi)){
 g_5_csvFile05_g_20.set{g_20_csvFile22}
-g_20_outputDir01_g_54 = Channel.empty()
 g_20_outputDir00_g_59 = Channel.empty()
 g_20_outputHTML11 = Channel.empty()
-g_20_runFile30_g_54 = Channel.empty()
 } else {
 
 cellranger_multi(g_0_reads00_g_20.collect(),g_18_reference01_g_20,g_11_2_g_20,g_12_3_g_20,g_10_4_g_20,g_5_csvFile05_g_20.flatten(),g_4_bcl_directory16_g_20,g_25_bcl_directory07_g_20,g_25_reads18_g_20.collect())
-g_20_outputDir01_g_54 = cellranger_multi.out.g_20_outputDir01_g_54
-(g_20_outputDir00_g_59) = [g_20_outputDir01_g_54]
+g_20_outputDir00_g_59 = cellranger_multi.out.g_20_outputDir00_g_59
 g_20_outputHTML11 = cellranger_multi.out.g_20_outputHTML11
 g_20_csvFile22 = cellranger_multi.out.g_20_csvFile22
-g_20_runFile30_g_54 = cellranger_multi.out.g_20_runFile30_g_54
-g_20_csvFile44 = cellranger_multi.out.g_20_csvFile44
+g_20_csvFile33 = cellranger_multi.out.g_20_csvFile33
 }
 
 
 Multi_h5_explorer(g_20_outputDir00_g_59)
 g_59_h5_file01_g_60 = Multi_h5_explorer.out.g_59_h5_file01_g_60
 
-
-bamtofastq_10x(g_20_runFile30_g_54,g_20_outputDir01_g_54)
-g_54_config_reads06_g_55 = bamtofastq_10x.out.g_54_config_reads06_g_55
-
-g_25_reads10_g_55= g_25_reads10_g_55.ifEmpty(ch_empty_file_1) 
-g_4_bcl_directory15_g_55= g_4_bcl_directory15_g_55.ifEmpty("") 
-g_25_bcl_directory07_g_55= g_25_bcl_directory07_g_55.ifEmpty("") 
+g_59_h5_file01_g_60= g_59_h5_file01_g_60.ifEmpty(ch_empty_file_1) 
 
 
-cellranger_multi_after_demultiplexing(g_25_reads10_g_55.collect(),g_18_reference01_g_55,g_11_2_g_55,g_12_3_g_55,g_10_4_g_55,g_4_bcl_directory15_g_55,g_54_config_reads06_g_55.transpose(),g_25_bcl_directory07_g_55)
-g_55_outputDir00 = cellranger_multi_after_demultiplexing.out.g_55_outputDir00
-g_55_outputHTML11 = cellranger_multi_after_demultiplexing.out.g_55_outputHTML11
-g_55_csvFile22 = cellranger_multi_after_demultiplexing.out.g_55_csvFile22
-
-g_0_reads00_g_13= g_0_reads00_g_13.ifEmpty(ch_empty_file_1) 
-g_4_bcl_directory13_g_13= g_4_bcl_directory13_g_13.ifEmpty("") 
-g_25_bcl_directory05_g_13= g_25_bcl_directory05_g_13.ifEmpty("") 
-g_25_reads16_g_13= g_25_reads16_g_13.ifEmpty(ch_empty_file_5) 
-
-
-cellranger_count(g_0_reads00_g_13.collect(),g_18_reference01_g_13,g_17_2_g_13,g_4_bcl_directory13_g_13,g_27_csvFile04_g_13.flatten(),g_25_bcl_directory05_g_13,g_25_reads16_g_13.collect())
-g_13_outputDir00 = cellranger_count.out.g_13_outputDir00
-g_13_outputHTML11 = cellranger_count.out.g_13_outputHTML11
-g_13_h5_file22 = cellranger_count.out.g_13_h5_file22
-g_13_h5_file30_g_60 = cellranger_count.out.g_13_h5_file30_g_60
-
-g_13_h5_file30_g_60= g_13_h5_file30_g_60.ifEmpty(ch_empty_file_1) 
-g_59_h5_file01_g_60= g_59_h5_file01_g_60.ifEmpty(ch_empty_file_2) 
-
-
-h5_channel_collector(g_13_h5_file30_g_60.collect(),g_59_h5_file01_g_60.collect())
+h5_channel_collector(g_59_h5_file01_g_60.collect())
 g_60_h5_file00_g_61 = h5_channel_collector.out.g_60_h5_file00_g_61
 
 
@@ -2276,21 +1770,13 @@ g51_17_rdsFile00_g51_19 = scRNA_Analysis_Module_PCA_and_Batch_Effect_Correction.
 
 scRNA_Analysis_Module_Clustering_and_Find_Markers(g51_17_rdsFile00_g51_19)
 g51_19_outputHTML00 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_outputHTML00
-g51_19_rdsFile10_g51_25 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_rdsFile10_g51_25
-(g51_19_rdsFile10_g51_22,g51_19_rdsFile10_g51_30) = [g51_19_rdsFile10_g51_25,g51_19_rdsFile10_g51_25]
+g51_19_rdsFile10_g51_22 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_rdsFile10_g51_22
+(g51_19_rdsFile10_g51_30) = [g51_19_rdsFile10_g51_22]
 g51_19_outFileTSV22 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_outFileTSV22
 
 
 scRNA_Analysis_Module_Create_h5ad(g51_19_rdsFile10_g51_22)
 g51_22_h5ad_file00 = scRNA_Analysis_Module_Create_h5ad.out.g51_22_h5ad_file00
-
-
-scRNA_Analysis_Module_seurat_to_sce(g51_19_rdsFile10_g51_25)
-g51_25_rdsFile00_g51_27 = scRNA_Analysis_Module_seurat_to_sce.out.g51_25_rdsFile00_g51_27
-
-
-scRNA_Analysis_Module_launch_isee(g51_25_rdsFile00_g51_27)
-g51_27_outputFileOut00 = scRNA_Analysis_Module_launch_isee.out.g51_27_outputFileOut00
 
 
 scRNA_Analysis_Module_SCEtoLOOM(g51_19_rdsFile10_g51_30)
