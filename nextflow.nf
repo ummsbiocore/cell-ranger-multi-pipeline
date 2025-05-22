@@ -78,6 +78,7 @@ mkfastq_sampleSheet2 = mkfastq_sampleSheet.collect{ '"' + it + '"'}
 #!/usr/bin/env python
 
 import subprocess
+import sys
 
 def is_not_blank(s):
     return bool(s and not s.isspace())
@@ -91,6 +92,7 @@ def copy_or_link(src, dest, is_directory=False):
         # For gsutil, the recursive flag must be before the source
         cmd = ["gsutil", "-m", "cp"]
         if is_directory:
+            src = src.rstrip('/')
             cmd.append("-r")
         cmd.append(src)
         if is_directory:
@@ -100,7 +102,13 @@ def copy_or_link(src, dest, is_directory=False):
     else:
         cmd = ["ln", "-s", src, dest]
     print(cmd)
-    subprocess.run(cmd)
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(e)
+        print(f"stderr: {e.stderr.strip()}")
+        print(f"stdout: {e.stdout.strip()}")
+        sys.exit(e.returncode)
 
 bcl_directory = ${bcl_directory2}
 mkfastq_sampleSheet = ${mkfastq_sampleSheet2}
@@ -177,6 +185,7 @@ expect_cells = params.cellranger_multi_prep.expect_cells
 force_cells = params.cellranger_multi_prep.force_cells
 cellranger_multi_chemistry = params.cellranger_multi_prep.cellranger_multi_chemistry
 r1_length = params.cellranger_multi_prep.r1_length
+check_library_compatibility = params.cellranger_multi_prep.check_library_compatibility
 include_introns = params.cellranger_multi_prep.include_introns
 //* params.cmo_set =  ""  //* @input @single_file @optional @description:"Optional. CMO set CSV file, declaring CMO constructs and associated barcodes."
 //feature
@@ -917,6 +926,7 @@ process cellranger_multi {
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${run_id}_outs$/) "multi/$filename"}
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*_web_summary.html$/) "cellranger_report/$filename"}
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /final_${config}$/) "multi/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*filtered_contig_annotations.csv$/) "cellranger_vdj_reports/$filename"}
 input:
  path reads
  path ref
@@ -933,6 +943,8 @@ output:
  path "*_web_summary.html"  ,emit:g_20_outputHTML11 
  path "final_${config}"  ,emit:g_20_csvFile22 
  path "*filtered_contig_annotations.csv" ,optional:true  ,emit:g_20_csvFile33 
+
+stageInMode 'copy'
 
 when:
 (params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi
@@ -1017,6 +1029,8 @@ with open(r'final_${config}', 'a') as f:
 		w.writerow(["r1-length","${r1_length}"])
 	if is_not_blank("${include_introns}"):
 		w.writerow(["include-introns","${include_introns}"])
+	if is_not_blank("${check_library_compatibility}"):
+		w.writerow(["check-library-compatibility","${check_library_compatibility}"])
 	if is_not_blank("${create_bam}"):
 		w.writerow(["create-bam","${create_bam}"])
 	if (is_not_blank("${feature_reference}") and ("${feature_reference}" != "NA")) or is_not_blank("${r1_length_feature}"):
@@ -1058,7 +1072,10 @@ with open(r'final_${config}', 'a') as f:
 print("## Config File:")
 with open('final_${config}', 'r') as f:
 	print(f.read())
-    
+
+find_process = subprocess.run(["find", "."], cwd=os.getcwd(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+print(find_process.stdout)
+
 cmd = ["cellranger","multi","--id=${run_id}","--csv=final_${config}","--localcores=16","--localmem=120"]
 print(cmd)
 
