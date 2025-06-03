@@ -54,10 +54,18 @@ Channel.value(params.mate).set{g_24_1_g_22}
 g_40_2_g50_58 = params.custom_additional_genome && file(params.custom_additional_genome, type: 'any').exists() ? file(params.custom_additional_genome, type: 'any') : ch_empty_file_1
 g_43_1_g51_0 = params.Metadata && file(params.Metadata, type: 'any').exists() ? file(params.Metadata, type: 'any') : ch_empty_file_1
 
-//* @style @array:{bcl_directory,mkfastq_sampleSheet} @multicolumn:{bcl_directory,mkfastq_sampleSheet}
+//* @style @array:{bcl_directory,sampleSheet} @multicolumn:{bcl_directory,sampleSheet}
 
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 8
+    $MEMORY = 6
+}
+//* platform
+//* platform
+//* autofill
 
-process mkfastq_prep {
+process Demultiplexer_prep {
 
 
 output:
@@ -67,13 +75,13 @@ output:
 container 'quay.io/viascientific/pipeline_base_image:1.0'
 
 when:
-(params.run_mkfastq && (params.run_mkfastq == "yes")) || !params.run_mkfastq
+params.run_bclConvert == "yes"
 
 script:
-bcl_directory = params.mkfastq_prep.bcl_directory
-mkfastq_sampleSheet = params.mkfastq_prep.mkfastq_sampleSheet
+bcl_directory = params.Demultiplexer_prep.bcl_directory
+sampleSheet = params.Demultiplexer_prep.sampleSheet
 bcl_directory2 = bcl_directory.collect{ '"' + it + '"'}
-mkfastq_sampleSheet2 = mkfastq_sampleSheet.collect{ '"' + it + '"'}
+sampleSheet2 = sampleSheet.collect{ '"' + it + '"'}
 """
 #!/usr/bin/env python
 
@@ -90,7 +98,7 @@ def copy_or_link(src, dest, is_directory=False):
             cmd.append("--recursive")
     elif src.startswith('gs://'):
         # For gsutil, the recursive flag must be before the source
-        cmd = ["gsutil", "-m", "cp"]
+        cmd = ["gsutil", "-m", '-o', 'GSUtil:parallel_thread_count=1', '-o', "GSUtil:parallel_process_count=${task.cpus}","cp"]
         if is_directory:
             src = src.rstrip('/')
             cmd.append("-r")
@@ -111,11 +119,11 @@ def copy_or_link(src, dest, is_directory=False):
         sys.exit(e.returncode)
 
 bcl_directory = ${bcl_directory2}
-mkfastq_sampleSheet = ${mkfastq_sampleSheet2}
+bcl_sampleSheet = ${sampleSheet2}
 
 for i in range(len(bcl_directory)):
     bcl = bcl_directory[i]
-    sampleSheet = mkfastq_sampleSheet[i]
+    sampleSheet = bcl_sampleSheet[i]
     # Remove last slash if exist
     bcl = bcl.rstrip('/')
     # Get name of the bcl directory
@@ -136,40 +144,37 @@ for i in range(len(bcl_directory)):
 
 //* autofill
 if ($HOSTNAME == "default"){
-    $CPU  = 4
+    $CPU  = 1
     $MEMORY = 50
-    $TIME = 1000
 }
 //* platform
 //* platform
 //* autofill
 
-process mkfastq {
+process bclConvert {
 
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${bcl_files}_fastq$/) "mkfastq/$filename"}
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${bcl_files}_reports$/) "mkfastq/$filename"}
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${bcl_files}_laneBarcode.html$/) "mkfastq_report/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${bcl_files}_fastq$/) "bclConvert/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${bcl_files}_reports$/) "bclConvert_report/$filename"}
 input:
  path bcl_files
 
 output:
- path "${bcl_files}_fastq"  ,emit:g_0_reads00_g_33 
+ path "${bcl_files}_fastq"  ,emit:g_0_reads00_g_20 
  path "${bcl_files}_reports"  ,emit:g_0_outputDir11 
- path "${bcl_files}_laneBarcode.html" ,optional:true  ,emit:g_0_outputHTML22 
+
+container 'quay.io/viascientific/bclconvert:4.3.6'
 
 when:
-(params.run_mkfastq && (params.run_mkfastq == "yes")) || !params.run_mkfastq
-
+params.run_bclConvert == "yes"
 script:
-cellranger_mkfastq_parameters = params.mkfastq.cellranger_mkfastq_parameters
+bclconvert_parameters = params.bclConvert.bclconvert_parameters
 """	
-cellranger mkfastq --id=mkfastq --run=${bcl_files} --csv=${bcl_files}/SampleSheet.csv --output-dir=fastq --rc-i2-override=true ${cellranger_mkfastq_parameters}
+bcl-convert ${bclconvert_parameters} --bcl-input-directory ${bcl_files} --output-directory fastq --sample-sheet ${bcl_files}/SampleSheet.csv
 mv fastq ${bcl_files}_fastq
 mkdir ${bcl_files}_reports 
-
+find .
 mv ${bcl_files}_fastq/Reports ${bcl_files}_reports/.
-mv ${bcl_files}_fastq/Stats ${bcl_files}_reports/.
-cp ${bcl_files}_reports/Reports/html/*/all/all/all/laneBarcode.html ${bcl_files}_laneBarcode.html
+mv ${bcl_files}_fastq/Logs ${bcl_files}_reports/.
 """
 
 }
@@ -1621,16 +1626,15 @@ mv overall_filtration_summary.tsv output
 workflow {
 
 
-mkfastq_prep()
-g_4_bcl00_g_0 = mkfastq_prep.out.g_4_bcl00_g_0
-g_4_bcl_directory16_g_20 = mkfastq_prep.out.g_4_bcl_directory16_g_20
+Demultiplexer_prep()
+g_4_bcl00_g_0 = Demultiplexer_prep.out.g_4_bcl00_g_0
+g_4_bcl_directory16_g_20 = Demultiplexer_prep.out.g_4_bcl_directory16_g_20
 
 
-mkfastq(g_4_bcl00_g_0.flatten())
-g_0_reads00_g_33 = mkfastq.out.g_0_reads00_g_33
-(g_0_reads00_g_20) = [g_0_reads00_g_33]
-g_0_outputDir11 = mkfastq.out.g_0_outputDir11
-g_0_outputHTML22 = mkfastq.out.g_0_outputHTML22
+bclConvert(g_4_bcl00_g_0.flatten())
+g_0_reads00_g_20 = bclConvert.out.g_0_reads00_g_20
+(g_0_reads00_g_33) = [g_0_reads00_g_20]
+g_0_outputDir11 = bclConvert.out.g_0_outputDir11
 
 
 cellranger_multi_prep()
