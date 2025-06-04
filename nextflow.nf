@@ -58,8 +58,8 @@ g_43_1_g51_0 = params.Metadata && file(params.Metadata, type: 'any').exists() ? 
 
 //* autofill
 if ($HOSTNAME == "default"){
-    $CPU  = 8
-    $MEMORY = 6
+    $CPU  = 1
+    $MEMORY = 1
 }
 //* platform
 //* platform
@@ -69,7 +69,7 @@ process Demultiplexer_prep {
 
 
 output:
- path "*"  ,emit:g_4_bcl00_g_0 
+ val bcl_and_sampleSheets  ,emit:g_4_bcl00_g_0 
  val bcl_directory  ,emit:g_4_bcl_directory16_g_20 
 
 container 'quay.io/viascientific/pipeline_base_image:1.0'
@@ -77,74 +77,19 @@ container 'quay.io/viascientific/pipeline_base_image:1.0'
 when:
 params.run_bclConvert == "yes"
 
-script:
+exec:
 bcl_directory = params.Demultiplexer_prep.bcl_directory
 sampleSheet = params.Demultiplexer_prep.sampleSheet
 bcl_directory2 = bcl_directory.collect{ '"' + it + '"'}
 sampleSheet2 = sampleSheet.collect{ '"' + it + '"'}
-"""
-#!/usr/bin/env python
+bcl_and_sampleSheets = [ bcl_directory, sampleSheet ].transpose().flatten()
 
-import subprocess
-import sys
-
-def is_not_blank(s):
-    return bool(s and not s.isspace())
-
-def copy_or_link(src, dest, is_directory=False):
-    if src.startswith('s3://'):
-        cmd = ["aws", "s3", "cp", src, dest]
-        if is_directory:
-            cmd.append("--recursive")
-    elif src.startswith('gs://'):
-        # For gsutil, the recursive flag must be before the source
-        cmd = ["gsutil", "-m", '-o', 'GSUtil:parallel_thread_count=1', '-o', "GSUtil:parallel_process_count=${task.cpus}","cp"]
-        if is_directory:
-            src = src.rstrip('/')
-            cmd.append("-r")
-        cmd.append(src)
-        if is_directory:
-            cmd.append(".")
-        else:
-            cmd.append(dest)
-    else:
-        cmd = ["ln", "-s", src, dest]
-    print(cmd)
-    try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError as e:
-        print(e)
-        print(f"stderr: {e.stderr.strip()}")
-        print(f"stdout: {e.stdout.strip()}")
-        sys.exit(e.returncode)
-
-bcl_directory = ${bcl_directory2}
-bcl_sampleSheet = ${sampleSheet2}
-
-for i in range(len(bcl_directory)):
-    bcl = bcl_directory[i]
-    sampleSheet = bcl_sampleSheet[i]
-    # Remove last slash if exist
-    bcl = bcl.rstrip('/')
-    # Get name of the bcl directory
-    bcl_name = bcl.rsplit('/', 1)[1]
-    
-    # Handle BCL
-    if is_not_blank(bcl_name):
-        copy_or_link(bcl + "/", bcl_name, is_directory=True)
-
-    # Handle SampleSheet
-    if not is_not_blank(sampleSheet):
-        sampleSheet = bcl + "/" + "SampleSheet.csv"
-    copy_or_link(sampleSheet, bcl_name + "/SampleSheet.csv")
-
-"""
 
 }
 
 //* autofill
 if ($HOSTNAME == "default"){
-    $CPU  = 1
+    $CPU  = 8
     $MEMORY = 50
 }
 //* platform
@@ -156,11 +101,13 @@ process bclConvert {
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${bcl_files}_fastq$/) "bclConvert/$filename"}
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${bcl_files}_reports$/) "bclConvert_report/$filename"}
 input:
- path bcl_files
+ tuple file(bcl_files),file(samplesheet)
 
 output:
- path "${bcl_files}_fastq"  ,emit:g_0_reads00_g_20 
+ path "${bcl_files}_fastq"  ,emit:g_0_reads00_g_33 
  path "${bcl_files}_reports"  ,emit:g_0_outputDir11 
+
+disk { 1500.GB * task.attempt }
 
 container 'quay.io/viascientific/bclconvert:4.3.6'
 
@@ -168,8 +115,9 @@ when:
 params.run_bclConvert == "yes"
 script:
 bclconvert_parameters = params.bclConvert.bclconvert_parameters
+SampleSheetLocation = samplesheet.name.startsWith('input.') ? "${bcl_files}/SampleSheet.csv" : "${samplesheet}"
 """	
-bcl-convert ${bclconvert_parameters} --bcl-input-directory ${bcl_files} --output-directory fastq --sample-sheet ${bcl_files}/SampleSheet.csv
+bcl-convert ${bclconvert_parameters} --bcl-input-directory ${bcl_files} --output-directory fastq --sample-sheet ${SampleSheetLocation}
 mv fastq ${bcl_files}_fastq
 mkdir ${bcl_files}_reports 
 find .
@@ -1627,13 +1575,13 @@ workflow {
 
 
 Demultiplexer_prep()
-g_4_bcl00_g_0 = Demultiplexer_prep.out.g_4_bcl00_g_0
+g_4_bcl00_g_0 = Demultiplexer_prep.out.g_4_bcl00_g_0.flatten().collate(2).map({item ->  if (item[1]) { return tuple(file(item[0]),file(item[1])) } else { return  tuple(file(item[0]))   } })
 g_4_bcl_directory16_g_20 = Demultiplexer_prep.out.g_4_bcl_directory16_g_20
 
 
-bclConvert(g_4_bcl00_g_0.flatten())
-g_0_reads00_g_20 = bclConvert.out.g_0_reads00_g_20
-(g_0_reads00_g_33) = [g_0_reads00_g_20]
+bclConvert(g_4_bcl00_g_0)
+g_0_reads00_g_33 = bclConvert.out.g_0_reads00_g_33
+(g_0_reads00_g_20) = [g_0_reads00_g_33]
 g_0_outputDir11 = bclConvert.out.g_0_outputDir11
 
 
