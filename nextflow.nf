@@ -23,13 +23,13 @@ def pathChecker(input, path, type){
 }
 	return [cmd,input]
 }
-if (!params.cmo_set){params.cmo_set = ""} 
 if (!params.feature_reference){params.feature_reference = ""} 
 if (!params.VDJ_reference){params.VDJ_reference = ""} 
 if (!params.reads){params.reads = ""} 
 if (!params.mate){params.mate = ""} 
 if (!params.custom_additional_genome){params.custom_additional_genome = ""} 
 if (!params.Metadata){params.Metadata = ""} 
+if (!params.cmo_set){params.cmo_set = ""} 
 // Stage empty file to be used as an optional input where required
 ch_empty_file_1 = file("$baseDir/.emptyfiles/NO_FILE_1", hidden:true)
 ch_empty_file_2 = file("$baseDir/.emptyfiles/NO_FILE_2", hidden:true)
@@ -39,7 +39,6 @@ ch_empty_file_5 = file("$baseDir/.emptyfiles/NO_FILE_5", hidden:true)
 ch_empty_file_6 = file("$baseDir/.emptyfiles/NO_FILE_6", hidden:true)
 ch_empty_file_7 = file("$baseDir/.emptyfiles/NO_FILE_7", hidden:true)
 
-g_10_4_g_20 = params.cmo_set && file(params.cmo_set, type: 'any').exists() ? file(params.cmo_set, type: 'any') : ch_empty_file_4
 g_11_2_g_20 = params.feature_reference && file(params.feature_reference, type: 'any').exists() ? file(params.feature_reference, type: 'any') : ch_empty_file_2
 g_12_3_g_20 = params.VDJ_reference && file(params.VDJ_reference, type: 'any').exists() ? file(params.VDJ_reference, type: 'any') : ch_empty_file_3
 if (params.reads){
@@ -53,6 +52,7 @@ Channel
 Channel.value(params.mate).set{g_24_1_g_22}
 g_40_2_g50_58 = params.custom_additional_genome && file(params.custom_additional_genome, type: 'any').exists() ? file(params.custom_additional_genome, type: 'any') : ch_empty_file_1
 g_43_1_g51_0 = params.Metadata && file(params.Metadata, type: 'any').exists() ? file(params.Metadata, type: 'any') : ch_empty_file_1
+g_68_9_g_20 = params.cmo_set && file(params.cmo_set, type: 'any').exists() ? file(params.cmo_set, type: 'any') : ch_empty_file_5
 
 //* @style @array:{bcl_directory,sampleSheet} @multicolumn:{bcl_directory,sampleSheet}
 
@@ -127,102 +127,6 @@ mv ${bcl_files}_fastq/Logs ${bcl_files}_reports/.
 
 }
 
-//libraries
-fastq_id = params.cellranger_multi_prep.fastq_id
-lanes_10x = params.cellranger_multi_prep.lanes_10x
-physical_library_id = params.cellranger_multi_prep.physical_library_id
-feature_types = params.cellranger_multi_prep.feature_types
-//gene-expression
-create_bam = params.cellranger_multi_prep.create_bam
-expect_cells = params.cellranger_multi_prep.expect_cells
-force_cells = params.cellranger_multi_prep.force_cells
-cellranger_multi_chemistry = params.cellranger_multi_prep.cellranger_multi_chemistry
-r1_length = params.cellranger_multi_prep.r1_length
-check_library_compatibility = params.cellranger_multi_prep.check_library_compatibility
-include_introns = params.cellranger_multi_prep.include_introns
-//* params.cmo_set =  ""  //* @input @single_file @optional @description:"Optional. CMO set CSV file, declaring CMO constructs and associated barcodes."
-//feature
-//* params.feature_reference =  ""  //* @input  @optional @single_file @description:"Feature reference CSV file, declaring Feature Barcode constructs and associated barcodes. Required for Feature Barcode libraries, otherwise optional."
-r1_length_feature = params.cellranger_multi_prep.r1_length_feature
-//vdj
-//* params.VDJ_reference =  ""  //* @input  @optional @single_file @description:"VDJ reference CSV file."
-r1_length_vdj = params.cellranger_multi_prep.r1_length_vdj
-//samples
-sample_id = params.cellranger_multi_prep.sample_id
-lane_of_sample_10x = params.cellranger_multi_prep.lane_of_sample_10x
-cmo_ids = params.cellranger_multi_prep.cmo_ids
-hashtag_ids = params.cellranger_multi_prep.hashtag_ids
-ocm_barcode_ids = params.cellranger_multi_prep.ocm_barcode_ids
-probe_barcode_ids = params.cellranger_multi_prep.probe_barcode_ids
-description = params.cellranger_multi_prep.description
-
-fastq_id2 = fastq_id.collect{ '"' + it + '"'}
-lanes_10x2 = lanes_10x.collect{ '"' + it + '"'}
-physical_library_id2 = physical_library_id.collect{ '"' + it + '"'}
-feature_types2 = feature_types.collect{ '"' + it + '"'}
-sample_id2 = sample_id.collect{ '"' + it + '"'}
-cmo_ids2 = cmo_ids.collect{ '"' + it + '"'}
-hashtag_ids2 = hashtag_ids.collect{ '"' + it + '"'}
-ocm_barcode_ids2 = ocm_barcode_ids.collect{ '"' + it + '"'}
-probe_barcode_ids2 = probe_barcode_ids.collect{ '"' + it + '"'}
-
-lane_of_sample2 = []
-if (lane_of_sample_10x instanceof List) {
-	lane_of_sample2 = lane_of_sample_10x.collect{ '"' + it + '"'}	
-} 
-description2 = description.collect{ '"' + it + '"'}
-
-//* @style @spreadsheet:{fastq_id,lanes_10x,physical_library_id,feature_types},{sample_id,lane_of_sample_10x,cmo_ids,hashtag_ids,ocm_barcode_ids,probe_barcode_ids,description} 
-
-process cellranger_multi_prep {
-
-
-output:
- path "*.csv"  ,emit:g_5_csvFile05_g_20 
-
-when:
-(params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi
-
-script:
-
-"""
-#!/usr/bin/env python
-
-import subprocess,sys
-import csv,os  
-
-def is_not_blank(s):
-	return bool(s and not s.isspace() and s != "null" and not s.startswith('NO_FILE'))
-
-lanes = ${lanes_10x2}
-lane_of_samples = ${lane_of_sample2}
-
-# Group config files by using lanes:  lanes + lane_of_samples
-all_lanes = lanes + lane_of_samples
-unique_lanes = list(set(all_lanes))
-print(unique_lanes)
-# remove "" from list if it has "any" in it
-if '' in unique_lanes :
-	unique_lanes.remove('')
-	if 'any' not in unique_lanes :
-		unique_lanes.append("any")
-
-# if unique_lanes has "any" and it has more than 1 lanes then remove "any"
-# other lanes will use "any"
-if (len(unique_lanes) > 1) and ('any' in unique_lanes):
-	unique_lanes.remove('any')
-	
-print(unique_lanes)
-
-for l in range(len(unique_lanes)):
-	f = open('config_'+unique_lanes[l]+'.csv', "w")
-	
-
-"""
-
-
-}
-
 
 process cellranger_fastq_prep {
 
@@ -279,8 +183,8 @@ input:
  path reads
 
 output:
- val bcl_directory  ,emit:g_25_bcl_directory07_g_20 
- path "reads_fastq"  ,emit:g_25_reads18_g_20 
+ val bcl_directory  ,emit:g_25_bcl_directory05_g_20 
+ path "reads_fastq"  ,emit:g_25_reads17_g_20 
 
 disk { 1000.GB * task.attempt }
 errorStrategy 'retry'
@@ -397,6 +301,150 @@ plots_flat_numseries = params.MultiQC.plots_flat_numseries
 multiqc ${multiqc_parameters}  -d -dd 2 --cl-config "plots_flat_numseries: ${plots_flat_numseries}" .
 
 """
+
+
+}
+
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 1
+    $MEMORY = 3
+}
+//* autofill
+
+process cellranger_multi_library_prep {
+
+
+output:
+ val librarySettings  ,emit:g_67_librarySettings00_g_5 
+
+when:
+params.run_cellranger_multi == "yes"
+
+exec:
+//libraries
+def group;
+fastq_id = params.cellranger_multi_library_prep.fastq_id
+group = params.cellranger_multi_library_prep.group
+feature_types = params.cellranger_multi_library_prep.feature_types
+librarySettings = [:]
+librarySettings["fastq_id"] = fastq_id.collect{ '"' + it + '"'}
+librarySettings["group_libraries"] = group.collect{ '"' + it + '"'}
+librarySettings["feature_types"] = feature_types.collect{ '"' + it + '"'}
+
+//* @spreadsheet:{fastq_id,group,feature_types}
+
+}
+
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 1
+    $MEMORY = 3
+}
+//* autofill
+
+process cellranger_multi_prep {
+
+input:
+ val librarySettings
+
+output:
+ path "*.csv"  ,emit:g_5_csvFile04_g_20 
+ val settings  ,emit:g_5_settings18_g_20 
+
+when:
+(params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi
+
+script:
+
+settings = [:]
+settings["fastq_id"] = librarySettings["fastq_id"]
+settings["group_libraries"] = librarySettings["group_libraries"]
+settings["feature_types"] = librarySettings["feature_types"]
+def group;
+//samples
+sample_id = params.cellranger_multi_prep.sample_id
+group = params.cellranger_multi_prep.group
+cmo_ids = params.cellranger_multi_prep.cmo_ids
+hashtag_ids = params.cellranger_multi_prep.hashtag_ids
+ocm_barcode_ids = params.cellranger_multi_prep.ocm_barcode_ids
+probe_barcode_ids = params.cellranger_multi_prep.probe_barcode_ids
+description = params.cellranger_multi_prep.description
+
+//gene-expression
+create_bam = params.cellranger_multi_prep.create_bam
+expect_cells = params.cellranger_multi_prep.expect_cells
+force_cells = params.cellranger_multi_prep.force_cells
+cellranger_multi_chemistry = params.cellranger_multi_prep.cellranger_multi_chemistry
+r1_length = params.cellranger_multi_prep.r1_length
+check_library_compatibility = params.cellranger_multi_prep.check_library_compatibility
+include_introns = params.cellranger_multi_prep.include_introns
+//feature
+r1_length_feature = params.cellranger_multi_prep.r1_length_feature
+//vdj
+r1_length_vdj = params.cellranger_multi_prep.r1_length_vdj
+
+settings["create_bam"] = create_bam
+settings["expect_cells"] = expect_cells
+settings["force_cells"] = force_cells
+settings["cellranger_multi_chemistry"] = cellranger_multi_chemistry
+settings["r1_length"] = r1_length
+settings["check_library_compatibility"] = check_library_compatibility
+settings["include_introns"] = include_introns
+settings["r1_length_feature"] = r1_length_feature
+settings["r1_length_vdj"] = r1_length_vdj
+
+group_samples = []
+if (group instanceof List) {
+	group_samples = group.collect{ '"' + it + '"'}	
+} 
+description2 = description.collect{ '"' + it + '"'}
+
+settings["sample_id"]=sample_id.collect{ '"' + it + '"'}
+settings["cmo_ids"]=cmo_ids.collect{ '"' + it + '"'}
+settings["hashtag_ids"]=hashtag_ids.collect{ '"' + it + '"'}
+settings["ocm_barcode_ids"]=ocm_barcode_ids.collect{ '"' + it + '"'}
+settings["probe_barcode_ids"]=probe_barcode_ids.collect{ '"' + it + '"'}
+settings["group_samples"]=group_samples
+settings["description"]=description2
+
+
+//* @style @multicolumn:{create_bam,expect_cells,force_cells,cellranger_multi_chemistry,r1_length, check_library_compatibility,include_introns}  @spreadsheet:{sample_id,group,cmo_ids,hashtag_ids,ocm_barcode_ids,probe_barcode_ids,description} 
+"""
+#!/usr/bin/env python
+
+import subprocess,sys
+import csv,os  
+
+def is_not_blank(s):
+	return bool(s and not s.isspace() and s != "null" and not s.startswith('NO_FILE'))
+
+lanes = ${settings["group_libraries"]}
+lane_of_samples = ${settings["group_samples"]}
+
+# Group config files by using lanes:  lanes + lane_of_samples
+all_lanes = lanes + lane_of_samples
+unique_lanes = list(set(all_lanes))
+print(unique_lanes)
+# remove "" from list if it has "all" in it
+if '' in unique_lanes :
+	unique_lanes.remove('')
+	if 'all' not in unique_lanes :
+		unique_lanes.append("all")
+
+# if unique_lanes has "all" and it has more than 1 lanes then remove "all"
+# other lanes will use "all"
+if (len(unique_lanes) > 1) and ('all' in unique_lanes):
+	unique_lanes.remove('all')
+	
+print(unique_lanes)
+
+for l in range(len(unique_lanes)):
+	f = open('config_'+unique_lanes[l]+'.csv', "w")
+	
+
+"""
+
 
 
 }
@@ -885,11 +933,12 @@ input:
  path ref
  path feature_reference
  path VDJ_reference
- path cmo_set
  path config
  val bcl_directory
  val fastq_start_directory
  path fastq_start_reads
+ val settings
+ path cmo_set
 
 output:
  path "${run_id}_outs"  ,emit:g_20_outputDir00_g_59 
@@ -897,14 +946,17 @@ output:
  path "final_${config}"  ,emit:g_20_csvFile22 
  path "*filtered_contig_annotations.csv" ,optional:true  ,emit:g_20_csvFile33 
 
+disk { 1500.GB * task.attempt }
 stageInMode 'copy'
 
 when:
 (params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi
 
 script:
+cpu = task.cpus - 1
+memory = task.memory.toGiga() - 8
 config_id = config.toString().replace(".csv","").replace("config_","")
-run_id = "run_"+config_id
+run_id = config_id
 bcl_directory2 = ""
 if (bcl_directory){
 	bcl_directory2 = bcl_directory.collect{ '"' + it + '"'}
@@ -925,17 +977,16 @@ def is_not_blank(s):
 
 # These variables are defined in cellranger_multi_prep -> advanced tab -> Header Script section
 bcl_directory = ${bcl_directory2}
-fastq_id = ${fastq_id2}
-lanes10x = ${lanes_10x2}
-physical_library_id = ${physical_library_id2}	
-feature_types = ${feature_types2}
-sample_id = ${sample_id2}
-cmo_ids = ${cmo_ids2} 
-hashtag_ids = ${hashtag_ids2} 
-ocm_barcode_ids = ${ocm_barcode_ids2} 
-probe_barcode_ids = ${probe_barcode_ids2} 
-lane_of_samples = ${lane_of_sample2}
-description = ${description2}
+fastq_id = ${settings["fastq_id"]}
+lanes10x = ${settings["group_libraries"]}
+feature_types = ${settings["feature_types"]}
+sample_id = ${settings["sample_id"]}
+cmo_ids = ${settings["cmo_ids"]} 
+hashtag_ids = ${settings["hashtag_ids"]} 
+ocm_barcode_ids = ${settings["ocm_barcode_ids"]} 
+probe_barcode_ids = ${settings["probe_barcode_ids"]} 
+lane_of_samples = ${settings["group_samples"]}
+description = ${settings["description"]}
 
 
 def is_nonempty_string_or_array(variable):
@@ -974,37 +1025,39 @@ with open(r'final_${config}', 'a') as f:
 	if is_not_blank("${cmo_set}") and ("${cmo_set}" != "NA"):
 		cmo_path = os.path.abspath("${cmo_set}")
 		w.writerow(["cmo-set",cmo_path])
-	if is_not_blank("${expect_cells}"):
-		w.writerow(["expect-cells","${expect_cells}"])
-	if is_not_blank("${cellranger_multi_chemistry}"):
-		w.writerow(["chemistry","${cellranger_multi_chemistry}"])
-	if is_not_blank("${r1_length}"):
-		w.writerow(["r1-length","${r1_length}"])
-	if is_not_blank("${include_introns}"):
-		w.writerow(["include-introns","${include_introns}"])
-	if is_not_blank("${check_library_compatibility}"):
-		w.writerow(["check-library-compatibility","${check_library_compatibility}"])
-	if is_not_blank("${create_bam}"):
-		w.writerow(["create-bam","${create_bam}"])
-	if (is_not_blank("${feature_reference}") and ("${feature_reference}" != "NA")) or is_not_blank("${r1_length_feature}"):
+	if is_not_blank("${settings["expect_cells"]}"):
+		w.writerow(["expect-cells","${settings["expect_cells"]}"])
+	if is_not_blank("${settings["force_cells"]}"):
+		w.writerow(["force-cells","${settings["force_cells"]}"])
+	if is_not_blank("${settings["cellranger_multi_chemistry"]}"):
+		w.writerow(["chemistry","${settings["cellranger_multi_chemistry"]}"])
+	if is_not_blank("${settings["r1_length"]}"):
+		w.writerow(["r1-length","${settings["r1_length"]}"])
+	if is_not_blank("${settings["include_introns"]}"):
+		w.writerow(["include-introns","${settings["include_introns"]}"])
+	if is_not_blank("${settings["check_library_compatibility"]}"):
+		w.writerow(["check-library-compatibility","${settings["check_library_compatibility"]}"])
+	if is_not_blank("${settings["create_bam"]}"):
+		w.writerow(["create-bam","${settings["create_bam"]}"])
+	if (is_not_blank("${feature_reference}") and ("${feature_reference}" != "NA")) or is_not_blank("${settings["r1_length_feature"]}"):
 		w.writerow(["[feature]"])
 		if is_not_blank("${feature_reference}") and ("${feature_reference}" != "NA"):
 			feature_reference_path = os.path.abspath("${feature_reference}")
 			w.writerow(["reference",feature_reference_path])
-		if is_not_blank("${r1_length_feature}"):
-			w.writerow(["r1-length","${r1_length_feature}"])
+		if is_not_blank("${settings["r1_length_feature"]}"):
+			w.writerow(["r1-length","${settings["r1_length_feature"]}"])
 	if is_not_blank("${VDJ_reference}") and ("${VDJ_reference}" != "NA"):
 		w.writerow(["[vdj]"])
 		vdj_path = os.path.abspath("${VDJ_reference}")
 		w.writerow(["reference",vdj_path])
-		if is_not_blank("${r1_length_vdj}"):
-			w.writerow(["r1-length","${r1_length_vdj}"])
+		if is_not_blank("${settings["r1_length_vdj"]}"):
+			w.writerow(["r1-length","${settings["r1_length_vdj"]}"])
 
 	if fastq_id:
 		w.writerow(["[libraries]"])
 		w.writerow(["fastq_id","fastqs","physical_library_id","feature_types"])
 		for i in range(len(fastq_id)):
-			if (lanes10x[i] == "any" or lanes10x[i] == "") or (unique_lane_id == lanes10x[i]) :
+			if (lanes10x[i] == "all" or lanes10x[i] == "") or (unique_lane_id == lanes10x[i]) :
 				for b in range(len(bcl_directory)):
 					bcl_name = bcl_directory[b].rstrip('/').rsplit('/', 1)[1]
 					print(bcl_name)
@@ -1013,13 +1066,13 @@ with open(r'final_${config}', 'a') as f:
 							bcl_path = os.path.abspath(root)
 							print("directory: "+bcl_path)
 							print(glob.glob(os.path.join(root, fastq_id[i] + "*")))
-							w.writerow([fastq_id[i],bcl_path,physical_library_id[i],feature_types[i]])
+							w.writerow([fastq_id[i],bcl_path,"",feature_types[i]])
 
 	if is_nonempty_string_or_array(sample_id): 
 		w.writerow(["[samples]"])
 		w.writerow(["sample_id", nonempty_columns[0][0], "description"])
 		for i in range(len(sample_id)):
-			if (lane_of_samples[i] == "any" or lane_of_samples[i] == "") or (unique_lane_id == lane_of_samples[i]) :
+			if (lane_of_samples[i] == "all" or lane_of_samples[i] == "") or (unique_lane_id == lane_of_samples[i]) :
 				w.writerow([sample_id[i],nonempty_columns[0][1][i],description[i]])
 				
 print("## Config File:")
@@ -1029,7 +1082,7 @@ with open('final_${config}', 'r') as f:
 find_process = subprocess.run(["find", "."], cwd=os.getcwd(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 print(find_process.stdout)
 
-cmd = ["cellranger","multi","--id=${run_id}","--csv=final_${config}","--localcores=16","--localmem=120"]
+cmd = ["cellranger","multi","--id=${run_id}","--csv=final_${config}","--localcores=${cpu}","--localmem=${memory}"]
 print(cmd)
 
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1039,20 +1092,20 @@ print(stderr.decode())
 if p.returncode != 0:
 	sys.exit(p.returncode)
 
-prefix = ""
+
 	
-subprocess.run("mv ${run_id}/outs "+prefix+"${run_id}_outs && rm -rf ${run_id}", shell=True, check=True)
-subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp "+prefix+"${run_id}_outs/per_sample_outs/\${i}/web_summary.html "+prefix+"lane10x_${config_id}_\${i}_web_summary.html; done", shell=True, check=True)
+subprocess.run("mv ${run_id}/outs ${run_id}_outs && rm -rf ${run_id}", shell=True, check=True)
+subprocess.run("for i in \$(ls ${run_id}_outs/per_sample_outs); do cp ${run_id}_outs/per_sample_outs/\${i}/web_summary.html ${config_id}_\${i}_web_summary.html; done", shell=True, check=True)
 try:
-	subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp "+prefix+"${run_id}_outs/per_sample_outs/\${i}/vdj_b/filtered_contig_annotations.csv "+prefix+"lane10x_${config_id}_\${i}_vdj_b_filtered_contig_annotations.csv; done", shell=True, check=True)
+	subprocess.run("for i in \$(ls ${run_id}_outs/per_sample_outs); do cp ${run_id}_outs/per_sample_outs/\${i}/vdj_b/filtered_contig_annotations.csv ${config_id}_\${i}_vdj_b_filtered_contig_annotations.csv; done", shell=True, check=True)
 except subprocess.CalledProcessError:
 	print("INFO: vdj_b/filtered_contig_annotations.csv was not found to publish it to report tab.")
 try:
-	subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp "+prefix+"${run_id}_outs/per_sample_outs/\${i}/vdj_t/filtered_contig_annotations.csv "+prefix+"lane10x_${config_id}_\${i}_vdj_t_filtered_contig_annotations.csv; done", shell=True, check=True)
+	subprocess.run("for i in \$(ls ${run_id}_outs/per_sample_outs); do cp ${run_id}_outs/per_sample_outs/\${i}/vdj_t/filtered_contig_annotations.csv ${config_id}_\${i}_vdj_t_filtered_contig_annotations.csv; done", shell=True, check=True)
 except subprocess.CalledProcessError:
 	print("INFO: vdj_t/filtered_contig_annotations.csv was not found to publish it to report tab.")
 try:
-	subprocess.run("for i in \$(ls "+prefix+"${run_id}_outs/per_sample_outs); do cp "+prefix+"${run_id}_outs/per_sample_outs/\${i}/vdj_t_gd/filtered_contig_annotations.csv "+prefix+"lane10x_${config_id}_\${i}_vdj_t_gd_filtered_contig_annotations.csv; done", shell=True, check=True)
+	subprocess.run("for i in \$(ls ${run_id}_outs/per_sample_outs); do cp ${run_id}_outs/per_sample_outs/\${i}/vdj_t_gd/filtered_contig_annotations.csv ${config_id}_\${i}_vdj_t_gd_filtered_contig_annotations.csv; done", shell=True, check=True)
 except subprocess.CalledProcessError:
 	print("INFO: vdj_t_gd/filtered_contig_annotations.csv was not found to publish it to report tab.")
 
@@ -1069,7 +1122,7 @@ input:
  path output_dir
 
 output:
- path "*.h5"  ,emit:g_59_h5_file01_g_60 
+ path "*.h5"  ,emit:g_59_h5_file00_g_61 
 
 script:
 """
@@ -1101,20 +1154,6 @@ fi
 
 """
 
-}
-
-
-process h5_channel_collector {
-
-input:
- path files2
-
-output:
- path "h5/*" ,optional:true  ,emit:g_60_h5_file00_g_61 
-
-"""
-mkdir h5 && mv *.h5 h5/ 2>/dev/null || true
-"""
 }
 
 
@@ -1585,17 +1624,13 @@ g_0_reads00_g_33 = bclConvert.out.g_0_reads00_g_33
 g_0_outputDir11 = bclConvert.out.g_0_outputDir11
 
 
-cellranger_multi_prep()
-g_5_csvFile05_g_20 = cellranger_multi_prep.out.g_5_csvFile05_g_20
-
-
 cellranger_fastq_prep(g_23_0_g_22,g_24_1_g_22)
 g_22_reads00_g_25 = cellranger_fastq_prep.out.g_22_reads00_g_25
 
 
 cellranger_fastq_collect(g_22_reads00_g_25.collect())
-g_25_bcl_directory07_g_20 = cellranger_fastq_collect.out.g_25_bcl_directory07_g_20
-g_25_reads18_g_20 = cellranger_fastq_collect.out.g_25_reads18_g_20
+g_25_bcl_directory05_g_20 = cellranger_fastq_collect.out.g_25_bcl_directory05_g_20
+g_25_reads17_g_20 = cellranger_fastq_collect.out.g_25_reads17_g_20
 
 
 if (!((params.run_FastQC && (params.run_FastQC == "yes")))){
@@ -1627,6 +1662,15 @@ g_35_reads11 = FastQC_after_mkfastq.out.g_35_reads11
 MultiQC(g_35_FastQCout04_g_52.flatten().toList())
 g_52_outputHTML00 = MultiQC.out.g_52_outputHTML00
 g_52_outputDir11 = MultiQC.out.g_52_outputDir11
+
+
+cellranger_multi_library_prep()
+g_67_librarySettings00_g_5 = cellranger_multi_library_prep.out.g_67_librarySettings00_g_5
+
+
+cellranger_multi_prep(g_67_librarySettings00_g_5)
+g_5_csvFile04_g_20 = cellranger_multi_prep.out.g_5_csvFile04_g_20
+g_5_settings18_g_20 = cellranger_multi_prep.out.g_5_settings18_g_20
 
 
 Check_and_Build_Module_Check_Genome_GTF()
@@ -1689,18 +1733,18 @@ cellranger_ref_checker(g_7_reference00_g_18)
 g_18_reference01_g_20 = cellranger_ref_checker.out.g_18_reference01_g_20
 
 g_0_reads00_g_20= g_0_reads00_g_20.ifEmpty(ch_empty_file_1) 
+g_25_bcl_directory05_g_20= g_25_bcl_directory05_g_20.ifEmpty("") 
 g_4_bcl_directory16_g_20= g_4_bcl_directory16_g_20.ifEmpty("") 
-g_25_bcl_directory07_g_20= g_25_bcl_directory07_g_20.ifEmpty("") 
-g_25_reads18_g_20= g_25_reads18_g_20.ifEmpty(ch_empty_file_7) 
+g_25_reads17_g_20= g_25_reads17_g_20.ifEmpty(ch_empty_file_6) 
 
 
 if (!((params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi)){
-g_5_csvFile05_g_20.set{g_20_csvFile22}
+g_5_csvFile04_g_20.set{g_20_csvFile22}
 g_20_outputDir00_g_59 = Channel.empty()
 g_20_outputHTML11 = Channel.empty()
 } else {
 
-cellranger_multi(g_0_reads00_g_20.collect(),g_18_reference01_g_20,g_11_2_g_20,g_12_3_g_20,g_10_4_g_20,g_5_csvFile05_g_20.flatten(),g_4_bcl_directory16_g_20,g_25_bcl_directory07_g_20,g_25_reads18_g_20.collect())
+cellranger_multi(g_0_reads00_g_20.collect(),g_18_reference01_g_20,g_11_2_g_20,g_12_3_g_20,g_5_csvFile04_g_20.flatten(),g_25_bcl_directory05_g_20,g_4_bcl_directory16_g_20,g_25_reads17_g_20.collect(),g_5_settings18_g_20,g_68_9_g_20)
 g_20_outputDir00_g_59 = cellranger_multi.out.g_20_outputDir00_g_59
 g_20_outputHTML11 = cellranger_multi.out.g_20_outputHTML11
 g_20_csvFile22 = cellranger_multi.out.g_20_csvFile22
@@ -1709,16 +1753,10 @@ g_20_csvFile33 = cellranger_multi.out.g_20_csvFile33
 
 
 Multi_h5_explorer(g_20_outputDir00_g_59)
-g_59_h5_file01_g_60 = Multi_h5_explorer.out.g_59_h5_file01_g_60
-
-g_59_h5_file01_g_60= g_59_h5_file01_g_60.ifEmpty(ch_empty_file_1) 
+g_59_h5_file00_g_61 = Multi_h5_explorer.out.g_59_h5_file00_g_61
 
 
-h5_channel_collector(g_59_h5_file01_g_60.collect())
-g_60_h5_file00_g_61 = h5_channel_collector.out.g_60_h5_file00_g_61
-
-
-file_to_set_conversion_for_h5(g_60_h5_file00_g_61.flatten())
+file_to_set_conversion_for_h5(g_59_h5_file00_g_61.flatten())
 g_61_h5_file00_g51_0 = file_to_set_conversion_for_h5.out.g_61_h5_file00_g51_0
 
 
