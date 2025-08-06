@@ -30,6 +30,7 @@ if (!params.mate){params.mate = ""}
 if (!params.custom_additional_genome){params.custom_additional_genome = ""} 
 if (!params.Metadata){params.Metadata = ""} 
 if (!params.cmo_set){params.cmo_set = ""} 
+if (!params.custom_additional_gtf){params.custom_additional_gtf = ""} 
 // Stage empty file to be used as an optional input where required
 ch_empty_file_1 = file("$baseDir/.emptyfiles/NO_FILE_1", hidden:true)
 ch_empty_file_2 = file("$baseDir/.emptyfiles/NO_FILE_2", hidden:true)
@@ -53,6 +54,7 @@ Channel.value(params.mate).set{g_24_1_g_22}
 g_40_2_g50_58 = params.custom_additional_genome && file(params.custom_additional_genome, type: 'any').exists() ? file(params.custom_additional_genome, type: 'any') : ch_empty_file_1
 g_43_1_g51_0 = params.Metadata && file(params.Metadata, type: 'any').exists() ? file(params.Metadata, type: 'any') : ch_empty_file_1
 g_68_9_g_20 = params.cmo_set && file(params.cmo_set, type: 'any').exists() ? file(params.cmo_set, type: 'any') : ch_empty_file_5
+g_69_3_g50_58 = params.custom_additional_gtf && file(params.custom_additional_gtf, type: 'any').exists() ? file(params.custom_additional_gtf, type: 'any') : ch_empty_file_2
 
 //* @style @array:{bcl_directory,sampleSheet} @multicolumn:{bcl_directory,sampleSheet}
 
@@ -643,10 +645,13 @@ input:
  path genome
  path gtf
  path custom_fasta
+ path custom_gtf
 
 output:
  path "${genomeName}_custom.fa"  ,emit:g50_58_genome00_g50_52 
  path "${gtfName}_custom_sorted.gtf"  ,emit:g50_58_gtfFile10_g50_53 
+
+container 'quay.io/viascientific/custom_sequence_to_genome_gtf:1.0'
 
 when:
 params.add_sequences_to_reference == "yes"
@@ -655,7 +660,7 @@ script:
 genomeName = genome.baseName
 gtfName = gtf.baseName
 is_custom_genome_exists = custom_fasta.name.startsWith('NO_FILE') ? "False" : "True" 
-
+is_custom_gtf_exists = custom_gtf.name.startsWith('NO_FILE') ? "False" : "True" 
 """
 #!/usr/bin/env python 
 import requests
@@ -689,8 +694,13 @@ os.system('cp ${gtfName}.gtf ${gtfName}_custom.gtf')
 if ${is_custom_genome_exists}:
 	os.system("tr -d '\\r' < ${custom_fasta} > ${custom_fasta}_tmp && rm ${custom_fasta} && mv ${custom_fasta}_tmp ${custom_fasta}")
 	os.system('cat ${custom_fasta} >> ${genomeName}_custom.fa')
-	createCustomGtfFromFasta("${custom_fasta}", "${custom_fasta}.gtf")
+	if ${is_custom_gtf_exists}:
+		os.system("tr -d '\\r' < ${custom_gtf} > ${custom_gtf}_tmp && rm ${custom_gtf} && mv ${custom_gtf}_tmp ${custom_gtf}")
+		os.system("mv ${custom_gtf} ${custom_fasta}.gtf")
+	else:
+		createCustomGtfFromFasta("${custom_fasta}", "${custom_fasta}.gtf")
 	os.system('cat ${custom_fasta}.gtf >> ${gtfName}_custom.gtf')
+
 	
 os.system('samtools faidx ${genomeName}_custom.fa')
 os.system('igvtools sort ${gtfName}_custom.gtf ${gtfName}_custom_sorted.gtf')
@@ -1695,7 +1705,7 @@ g50_57_gtfFile01_g50_58.set{g50_58_gtfFile10_g50_53}
 (g50_58_gtfFile10_g50_54) = [g50_58_gtfFile10_g50_53]
 } else {
 
-Check_and_Build_Module_Add_custom_seq_to_genome_gtf(g50_21_genome00_g50_58,g50_57_gtfFile01_g50_58,g_40_2_g50_58)
+Check_and_Build_Module_Add_custom_seq_to_genome_gtf(g50_21_genome00_g50_58,g50_57_gtfFile01_g50_58,g_40_2_g50_58,g_69_3_g50_58)
 g50_58_genome00_g50_52 = Check_and_Build_Module_Add_custom_seq_to_genome_gtf.out.g50_58_genome00_g50_52
 (g50_58_genome01_g50_54) = [g50_58_genome00_g50_52]
 g50_58_gtfFile10_g50_53 = Check_and_Build_Module_Add_custom_seq_to_genome_gtf.out.g50_58_gtfFile10_g50_53

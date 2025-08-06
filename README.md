@@ -473,6 +473,108 @@ Please check following websites for detailed information:
 * ***Location**: 	results/qc/fastqcreport.html
 
 
+
+### Example Datasets:
+#### **Example 1. PBMCs of a Healthy Donor (v1) - 5' Gene Expression + Cell Surface Protein Libraries (VDJ-B + VDJ-T)**
+- **Source**: https://www.10xgenomics.com/datasets/pbm-cs-of-a-healthy-donor-v-1-1-1-standard-3-1-0
+- **Dataset**: https://www.viafoundry.com/test_data/cellranger_multi/fastq_PBMC-VDJ-GEX-downsampled
+- **feature_reference**:
+https://www.viafoundry.com/test_data/cellranger_multi/fastq_PBMC-VDJ-GEX-downsampled/vdj_v1_hs_pbmc3_feature_ref.csv
+| id                    | name                                  | read | pattern                  | sequence        | feature_type     |
+| --------------------- | ------------------------------------- | ---- | ------------------------ | --------------- | ---------------- |
+| CD3                   | CD3_UCHT1_TotalC                      | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | CTCATTGTAACTCCT | Antibody Capture |
+| CD19                  | CD19_HIB19_TotalC                     | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | CTGGGCAATTACTCG | Antibody Capture |
+| CD45RA                | CD45RA_HI100_TotalC                   | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | TCAATCCTTCCGCTT | Antibody Capture |
+| CD4                   | CD4_RPA-T4_TotalC                     | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | TGTTCCCGCTCAACT | Antibody Capture |
+| CD8a                  | CD8a_RPA-T8_TotalC                    | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | GCTGCGCTTTCCATT | Antibody Capture |
+| CD14                  | CD14_M5E2_TotalC                      | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | TCTCAGACCTCCGTA | Antibody Capture |
+| CD16                  | CD16_3G8_TotalC                       | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | AAGTTCACTCTTTGC | Antibody Capture |
+| CD56                  | CD56_QA17A16_TotalC                   | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | TTCGCCGCATTGAGT | Antibody Capture |
+| CD25                  | CD25_BC96_TotalC                      | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | TTTGTCCTGTACGCC | Antibody Capture |
+| CD45RO                | CD45RO_UCHL1_TotalC                   | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | CTCCGAATCATGTTG | Antibody Capture |
+| PD-1                  | PD-1_EH12.2H7_TotalC                  | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | ACAGCGCCGTATTTA | Antibody Capture |
+| TIGIT                 | TIGIT_A15153G_TotalC                  | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | TTGCTTACCGCCAGA | Antibody Capture |
+| isotype_control_IgG1  | isotype_control_IgG1_MOPC-21_TotalC   | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | GCCGGACGACATTAA | Antibody Capture |
+| isotype_control_IgG2a | isotype_control_IgG2a_MOPC-173_TotalC | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | CTCCTACCTAAACTG | Antibody Capture |
+| isotype_control_IgG2b | isotype_control_IgG2b_MPC-11_TotalC   | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | ATATGTATCACGCGA | Antibody Capture |
+| CD127                 | CD127_A019D5_TotalC                   | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | GTGTGTTGTCCTATG | Antibody Capture |
+| CD15                  | CD15_W6D3_TotalC                      | R2   | ^NNNNNNNNNN(BC)NNNNNNNNN | TCACCAGTACCTAGT | Antibody Capture |
+
+
+- **Libraries Section**
+| *fastq_id* | *group* | *feature_types* |
+| -------- | -------- | -------- |
+|5gex_protein_antibody	| |		Antibody Capture| 
+|5gex_protein_gex		| |	Gene Expression| 
+|vdj-b		| |	VDJ-B| 
+|vdj-t	| |		VDJ-T| 
+
+- **Sample Separation** 
+Not required
+
+#### **Example 2. PBMCs - Multiplexed - CMOs**
+* **Source**: 10x Datasets
+* **Dataset**: https://www.viafoundry.com/test_data/cellranger_multi/fastq_PBMCs_Multiplexed_2CMOs_subsampled
+- **feature_reference**:
+https://www.viafoundry.com/test_data/cellranger_multi/fastq_PBMCs_Multiplexed_2CMOs_subsampled/SC3_v3_NextGem_DI_CellPlex_Mouse_PBMC_10K_Multiplex_count_feature_reference.csv
+| id     | name   | read | pattern | sequence        | feature_type         |
+| ------ | ------ | ---- | ------- | --------------- | -------------------- |
+| CMO301 | CMO301 | R2   | 5P(BC)  | ATGAGGAATTCCTGC | Multiplexing Capture |
+| CMO302 | CMO302 | R2   | 5P(BC)  | CATGCCAATAGAGCG | Multiplexing Capture |
+| CMO303 | CMO303 | R2   | 5P(BC)  | CCGTCGTCCAAGCAT | Multiplexing Capture |
+| CMO304 | CMO304 | R2   | 5P(BC)  | AACGTTAATCACTCA | Multiplexing Capture |
+| CMO305 | CMO305 | R2   | 5P(BC)  | CGCGATATGGTCGGA | Multiplexing Capture |
+| CMO306 | CMO306 | R2   | 5P(BC)  | AAGATGAGGTCTGTG | Multiplexing Capture |
+| CMO307 | CMO307 | R2   | 5P(BC)  | AAGCTCGTTGGAAGA | Multiplexing Capture |
+| CMO308 | CMO308 | R2   | 5P(BC)  | CGGATTCCACATCAT | Multiplexing Capture |
+| CMO309 | CMO309 | R2   | 5P(BC)  | GTTGATCTATAACAG | Multiplexing Capture |
+| CMO310 | CMO310 | R2   | 5P(BC)  | GCAGGAGGTATCAAT | Multiplexing Capture |
+| CMO311 | CMO311 | R2   | 5P(BC)  | GAATCGTGATTCTTC | Multiplexing Capture |
+| CMO312 | CMO312 | R2   | 5P(BC)  | ACATGGTCAACGCTG | Multiplexing Capture |
+
+- **Libraries section**
+| *fastq_id* | *group* | *feature_types* |
+| -------- | -------- | -------- |
+| SC3_v3_NextGem_DI_CellPlex_Mouse_PBMC_10K_1_multiplexing_capture	| group1	| Multiplexing Capture| 
+| SC3_v3_NextGem_DI_CellPlex_Mouse_PBMC_10K_2_multiplexing_capture| 	group1 | 	Multiplexing Capture| 
+| SC3_v3_NextGem_DI_CellPlex_Mouse_PBMC_gex_sub	| group1	| Gene Expression| 
+
+
+- **Sample Separation** 
+| *sample_id* | *cmo_ids* | *description* |
+| -------- | -------- | -------- |
+| PBMCs_mouse_1	 |	CMO309	 |			PBMCs_mouse_1 |
+| PBMCs_mouse_2	 |	CMO310		 |		PBMCs_mouse_2 |
+
+
+**Example 3. Demultiplexing with BCLConvert:**
+- Source: https://www.10xgenomics.com/support/software/cell-ranger/latest/analysis/inputs/cr-direct-demultiplexing-bcl-convert
+- **Dataset**:https://cf.10xgenomics.com/supp/spatial-exp/demultiplexing/iseq-DI.tar.gz
+- **Sample Sheet:** https://cf.10xgenomics.com/supp/spatial-exp/demultiplexing/bcl_convert_samplesheet.csv
+
+```
+[Header]			
+FileFormatVersion	2		
+			
+[BCLConvert_Settings]			
+CreateFastqForIndexReads	0		
+			
+[BCLConvert_Data]			
+Lane	Sample_ID	index	index2
+1	iseq-DI	GTAACATGCG	AGGTAACACT
+```
+
+- **Introduction:**
+	- First download BCL directory and untar it.(tar -xf /working-directory/iseq-DI.tar.gz)
+	- Upload BCL directory and CSV file to location where Foundry can reach. (Cloud buckets or HPC clusters)
+	- Enable **Run BCL-Convert** input of the pipeline
+	- Under Demultiplexer_prep section, click **Add** button and enter necessary locations:
+		- **bcl_directory**: enter location of bcl_directory (not tar or gzipped)
+		- **SampleSheet**: Sample sheet documentation for BCL Convert. By default, SampleSheet.csv file should be located in the BCL directory. If it’s missing from that directory or you need to specify a different location, please provide the full path to the file. For example: s3://bio/BCLfolder/SampleSheet2.csv
+- **Notes:**
+	- To test BCL Convert you can use the iseq-DI example dataset. This dual-indexed iSeq dataset has been selected for its small size (541 MB). It should not be used to **run downstream pipelines**.
+
+
 # References & Additional Documentation
 
 **Additional CellRanger Multi information:**  
