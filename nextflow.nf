@@ -495,7 +495,8 @@ output:
  path "${newNameFasta}"  ,emit:g50_21_genome00_g50_58 
  path "${newNameGtf}"  ,emit:g50_21_gtfFile10_g50_57 
 
-container 'quay.io/viascientific/pipeline_base_image:1.0'
+container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/pipeline_base_image:1.0" : "quay.io/viascientific/pipeline_base_image:1.0" }"
+
 
 when:
 params.run_Download_Genomic_Sources == "yes"
@@ -580,62 +581,104 @@ output:
 when:
 params.replace_geneID_with_geneName == "yes"
 
-shell:
-'''
+script:
+"""
 #!/usr/bin/env perl 
 
 ## Replace gene_id column with gene_name column in the gtf file
 ## Also check if any transcript_id defined in multiple chromosomes.
 system("mkdir out");
 
-open(OUT1, ">out/!{gtf}");
-open(OUT2, ">notvalid_!{gtf}");
-my %transcipt;
-my $file = "!{gtf}";
-open IN, $file;
-while( my $line = <IN>)  {
-    chomp;
-    @a=split("\\t",$line);
-    @attr=split(";",$a[8]);
-    my %h;
-    for my $elem (@attr) {
-        ($first, $rest) = split ' ', $elem, 2;
-        $h{$first} = $rest.";";
+open(my \$out_valid, ">out/${gtf}");
+open(my \$out_notvalid, ">notvalid_${gtf}");
+my \$fileName = "${gtf}";
+# To track transcript IDs and ensure each appears on only one chromosome.
+my %transcript_chrom;
+
+# Open input file.
+open(my \$in, "<", \$fileName) or die "Cannot open \$fileName: \$!";
+
+while (my \$line = <\$in>) {
+    chomp \$line;
+    my @fields = split(/\\t/, \$line);
+	my \$feature = \$fields[2];
+	
+    if (@fields < 9) {
+        print \$out_notvalid "\$line\n";
+        next;
     }
-    my $geneId = "";
-    my $transcript_id = "";
-    if (exists $h{"gene_name"}){
-        $geneId = $h{"gene_name"};
-    } elsif (exists $h{"gene_id"}){
-        $geneId = $h{"gene_id"};
-    }
-    if (exists $h{"transcript_id"}){
-        $transcript_id = $h{"transcript_id"};
-    } elsif (exists $h{"transcript_name"}){
-        $transcript_id = $h{"transcript_name"};
-    } elsif (exists $h{"gene_id"}){
-        $transcript_id = $h{"gene_id"};
-    }
-    if ($geneId ne "" && $transcript_id ne ""){
-        ## check if any transcript_id defined in multiple chromosomes.
-        if (exists $transcipt{$transcript_id}){
-             if ($transcipt{$transcript_id} ne $a[0]){
-               print OUT2 "$transcript_id: $transcipt{$transcript_id} vs $a[0]\\n";
-                next;
-                }
-        } else {
-             $transcipt{$transcript_id} = $a[0];
+
+    # Split the attribute column by semicolons.
+    my @attrs = split(/;/, \$fields[8]);
+    # Remove any empty elements (if present).
+    @attrs = grep { /\\S/ } @attrs;
+
+    # Create a hash for easy lookup of attributes.
+    my %attr_hash;
+    foreach my \$attr (@attrs) {
+        \$attr =~ s/^\\s+|\\s+\$//g;  # trim leading and trailing whitespace
+        if ( \$attr =~ /^(\\S+)\\s+"([^"]+)"/ ) {
+            my (\$key, \$value) = (\$1, \$2);
+            \$attr_hash{\$key} = \$value;
         }
-        $a[8]=join(" ",("gene_id",$geneId,"transcript_id",$transcript_id));
-        print OUT1 join("\\t",@a), "\\n";
-    }  else {
-        print OUT2 "$line";
+    }
+
+    # Determine the gene_id value: use gene_name if available.
+    my \$geneId = "";
+    if (exists \$attr_hash{"gene_name"}) {
+        \$geneId = \$attr_hash{"gene_name"};
+    } elsif (exists \$attr_hash{"gene_id"}) {
+        \$geneId = \$attr_hash{"gene_id"};
+    }
+
+    # Determine transcript_id from available attributes.
+    my \$transcript_id = "";
+    if (exists \$attr_hash{"transcript_id"} && \$attr_hash{"transcript_id"} ne "") {
+        \$transcript_id = \$attr_hash{"transcript_id"};
+    } elsif (exists \$attr_hash{"transcript_name"}) {
+        \$transcript_id = \$attr_hash{"transcript_name"};
+    } elsif (exists \$attr_hash{"gene_id"}) {
+        \$transcript_id = \$attr_hash{"gene_id"};
+    } 
+    
+    # If both geneId and transcript_id were found, continue processing.
+    if (\$geneId ne "" && \$transcript_id ne "") {
+        # Check that the same transcript_id is not found on multiple chromosomes.
+        if (exists \$transcript_chrom{\$transcript_id}) {
+            if (\$transcript_chrom{\$transcript_id} ne \$fields[0]) {
+                print \$out_notvalid "\$transcript_id: \$transcript_chrom{\$transcript_id} vs \$fields[0]\\n";
+                next;
+            }
+        } else {
+            \$transcript_chrom{\$transcript_id} = \$fields[0];
+        }
+
+        # Remove any existing gene_id and transcript_id attributes from the list.
+        @attrs = grep { !/^\\s*(gene_id|transcript_id)\\b/ } @attrs;
+
+        # Prepend the updated gene_id and transcript_id attributes.
+        # if \$feature = "gene" no need to add transcript_id column (which will be gene_id)
+        if (\$feature ne "gene"){
+        	unshift @attrs, 'transcript_id "' . \$transcript_id . '"';
+        }
+        unshift @attrs, 'gene_id "' . \$geneId . '"';
+
+        # Reassemble the attribute field (adding a semicolon after each item).
+        \$fields[8] = join("; ", @attrs) . ";";
+        # --------------------------------------------------------------------
+
+        # Print the updated line to the valid output file.
+        print \$out_valid join("\\t", @fields) . "\\n";
+    } else {
+        # If either geneId or transcript_id is missing, output to the not valid file.
+        print \$out_notvalid "\$line\\n";
     }
 }
-close OUT1;
-close OUT2;
-close IN;
-'''
+
+close \$in;
+close \$out_valid;
+close \$out_notvalid;
+"""
 }
 
 
@@ -651,7 +694,7 @@ output:
  path "${genomeName}_custom.fa"  ,emit:g50_58_genome00_g50_52 
  path "${gtfName}_custom_sorted.gtf"  ,emit:g50_58_gtfFile10_g50_53 
 
-container 'quay.io/viascientific/custom_sequence_to_genome_gtf:1.0'
+container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/custom_sequence_to_genome_gtf:1.0" : "quay.io/viascientific/custom_sequence_to_genome_gtf:1.0" }"
 
 when:
 params.add_sequences_to_reference == "yes"
@@ -807,7 +850,8 @@ output:
  path "*/${genomeSizes2}" ,optional:true  ,emit:g50_54_genomeSizes22 
  path "*/${bed2}" ,optional:true  ,emit:g50_54_bed33 
 
-container 'quay.io/viascientific/pipeline_base_image:1.0'
+container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/pipeline_base_image:1.0" : "quay.io/viascientific/pipeline_base_image:1.0" }"
+
 stageInMode 'copy'
 
 script:
@@ -1263,9 +1307,8 @@ output:
 
 container "quay.io/viascientific/scrna_seurat:2.0"
 
-shell:
-
-'''
+script:
+"""
 #!/usr/bin/env Rscript
 
 library(Seurat)
@@ -1286,7 +1329,7 @@ for(i in 1:length(list_of_samples)){
 }
 saveRDS(list_of_seurat, file="merged_filtered_seurat.rds")
 
-'''
+"""
 
 
 }
@@ -1310,8 +1353,7 @@ output:
 
 container "quay.io/viascientific/scrna_seurat:2.0"
 
-shell:
-
+script:
 varFeatures = params.scRNA_Analysis_Module_PCA_and_Batch_Effect_Correction.varFeatures
 selmethod = params.scRNA_Analysis_Module_PCA_and_Batch_Effect_Correction.selmethod
 Batch_Effect_Correction = params.scRNA_Analysis_Module_PCA_and_Batch_Effect_Correction.Batch_Effect_Correction
@@ -1319,7 +1361,7 @@ WNN = params.scRNA_Analysis_Module_PCA_and_Batch_Effect_Correction.WNN
 
 //* @style @multicolumn:{varFeatures, selmethod},{Batch_Effect_Correction, WNN}
 
-'''
+"""
 #!/usr/bin/env Rscript
 
 # libraries
@@ -1328,10 +1370,10 @@ library(dplyr)
 #install.packages("harmony",repos = "http://cran.us.r-project.org")
 library(harmony)
 
-selmethod <- "!{selmethod}"
-varFeatures <- "!{varFeatures}"
+selmethod <- "${selmethod}"
+varFeatures <- "${varFeatures}"
 
-Data=readRDS("!{seurat_object}")
+Data=readRDS("${seurat_object}")
 Multi_sample=0
 if (length(Data)==1) {
 	Data=Data[[1]]
@@ -1359,7 +1401,7 @@ Multi_sample=1
 			Data <- ScaleData(Data,vars.to.regress="percent.mt")
 			}
 		Data=RunPCA(Data,npcs=100)
-		if (as.logical("!{Batch_Effect_Correction}")){
+		if (as.logical("${Batch_Effect_Correction}")){
 		Data=RunHarmony(Data,assay.use = DefaultAssay(Data),group.by.vars = "sample",max.iter.harmony = 10000,max.iter.cluster = 10000)
 		}
 	} else {
@@ -1371,17 +1413,17 @@ Multi_sample=1
 			Data <- ScaleData(Data,vars.to.regress="percent.mt")
 		}
 		Data=RunPCA(Data,npcs=100)
-		if (as.logical("!{Batch_Effect_Correction}")){
+		if (as.logical("${Batch_Effect_Correction}")){
 		Data=RunHarmony(Data,assay.use = DefaultAssay(Data),group.by.vars = "sample",max.iter.harmony = 10000,max.iter.cluster = 10000)
 		}
 
 	}
 }
 
-if ("!{WNN}"!="") {
+if ("${WNN}"!="") {
 original.assay=DefaultAssay(Data)
 
-DefaultAssay(Data)="!{WNN}"
+DefaultAssay(Data)="${WNN}"
 
 Data=NormalizeData(Data,normalization.method = "CLR",margin=2)
 
@@ -1392,7 +1434,7 @@ Data=ScaleData(Data)
 Data=RunPCA(Data,reduction.name = "wpca")
 
 if (Multi_sample==1) {
-	Data=RunHarmony(Data,group.by.vars = "sample",assay.use = "!{WNN}",reduction = "wpca",reduction.save = "wharmony")
+	Data=RunHarmony(Data,group.by.vars = "sample",assay.use = "${WNN}",reduction = "wpca",reduction.save = "wharmony")
 
 }
 
@@ -1400,42 +1442,9 @@ DefaultAssay(Data)=original.assay
 
 }
 
-
-
-
-#if (DefaultAssay(Data)=="SCT"){
-#
-#if (length(unique(Data$sample))==1) {
-#	Data=RunPCA(Data,npcs=100)
-#} else {
-#	Data <- SplitObject(Data, split.by = "sample")
-#	variable.features=SelectIntegrationFeatures(object.list = Data, nfeatures = as.numeric(varFeatures))
-#	Data <- merge(Data[[1]],Data[-1])
-#	VariableFeatures(Data) <- variable
-#	if (all(Data[["percent.mt"]]==0)) {
-#		Data <- ScaleData(Data)
-#	} else {
-#		Data <- ScaleData(Data,vars.to.regress="percent.mt")
-#	}
-#
-#	Data=RunPCA(Data,npcs=100)
-#	Data=RunHarmony(Data,assay.use = DefaultAssay(Data),group.by.vars = "sample",max.iter.harmony = 10000,max.iter.cluster = 10000)
-#}
-#} else {
-#	Data <- FindVariableFeatures(Data,selection.method=selmethod,nfeatures=as.numeric(varFeatures))
-#	if (all(Data[["percent.mt"]]==0)) {
-#		Data <- ScaleData(Data)
-#	} else {
-#		Data <- ScaleData(Data,vars.to.regress="percent.mt")
-#	}
-#	Data=RunPCA(Data,npcs=100)
-#	if (length(unique(Data$sample))>1) {
-#		Data=RunHarmony(Data,assay.use = DefaultAssay(Data),group.by.vars = "sample",max.iter.harmony = 10000,max.iter.cluster = 10000)
-#	}
-#}
 saveRDS(Data,"Reduced_and_Corrected.rds")
 
-'''
+"""
 
 
 }
@@ -1546,43 +1555,32 @@ output:
 
 container "quay.io/viascientific/scrna_seurat:2.0"
 
-shell:
+script:
 Generate_loom_file = params.scRNA_Analysis_Module_SCEtoLOOM.Generate_loom_file
-
-'''
+"""
 #!/usr/bin/env Rscript
 
 #library
 library(Seurat)
-
-if (as.logical("!{Generate_loom_file}")) {
+if (as.logical("${Generate_loom_file}")) {
 	
-Data=readRDS("!{seurat_object}")
-
-
+Data=readRDS("${seurat_object}")
 
 annotation=read.csv("https://huggingface.co/datasets/ctheodoris/Genecorpus-30M/raw/main/example_input_files/gene_info_table.csv",header = T,row.names = 1)
-annotation=annotation[annotation$gene_name%in%names(table(annotation$gene_name))[table(annotation$gene_name)==1],]
-rownames(annotation)=annotation$gene_name
+annotation=annotation[annotation\$gene_name%in%names(table(annotation\$gene_name))[table(annotation\$gene_name)==1],]
+rownames(annotation)=annotation\$gene_name
 metadata=Data@meta.data
-matrix=Data@assays$RNA@counts
-
+matrix=Data@assays\$RNA@counts
 matrix=matrix[rowSums(matrix)>0,]
-
 matrix=matrix[intersect(rownames(matrix),rownames(annotation)),]
-
 annotation=annotation[intersect(rownames(matrix),rownames(annotation)),]
-
-rownames(matrix)=annotation$ensembl_id
+rownames(matrix)=annotation\$ensembl_id
 matrix=matrix[rownames(matrix)[order(rownames(matrix),decreasing = F)],]
-
 NewData=CreateSeuratObject(matrix,meta.data = metadata)
-
 NewData.loom <- SeuratDisk::as.loom(NewData, filename = "Data.loom", verbose = FALSE)
 
-
 }
-'''
+"""
 
 
 }

@@ -1,18 +1,11 @@
-**CellRanger Multi** (v9.0.1) pipeline is designed to process Chromium single-cell RNA-seq output to align reads, generate feature-barcode matrices and perform clustering and gene expression analysis.
+**CellRanger Multi** (v9.0.1) pipeline is designed to process Chromium single-cell RNA-seq output to align reads, generate feature-barcode matrices and perform clustering and gene expression analysis. BclConvert demultiplexes the Illumina sequencer's basecall files (BCLs) for each flow cell directory into FASTQ files or the FASTQ files can be given directly.  
 
-* The cellranger mkfastq demultiplexes the Illumina sequencer's basecall files (BCLs) for each flow cell directory into FASTQ files or the FASTQ files can be given directly.  
-* The cellranger multi is required to analyze various types of data:  
-   	  
-  1. 3' Gene Expression + Cell Multiplexing (+ Antibody/CRISPR Guide 		Capture)  
-  2. Flex Gene Expression (+ Antibody/CRISPR Guide Capture)  
-  3. 5' Gene Expression + V(D)J (+ FB)  
-  4. 5' Gene Expression + V(D)J + Antigen Capture (BEAM) (+ Antibody 		Capture)
-
-## Key Use cases:
-
-* **scRNA-seq analyses**: Chromium single-cell RNA-seq analyses  
-* **3' Cell Multiplexing Data**: Required for 3' Cell Multiplexing data analysis.  
-* **Data Preprocessing:** Prepares reads from cloud/local and runs optional VDJ/reference/cmo set setups.
+## Table of Contents
+- [Features](#features)
+- [Inputs](#inputs)
+- [Outputs](#outputs)
+- [Example Datasets](#example-datasets)
+- [References and Additional Documentation](#references-and-additional-documentation)
 
 ## Features
 
@@ -29,6 +22,12 @@ Please check following websites for detailed information:
 - 10X Demultiplexing Guide: `https://www.10xgenomics.com/support/jp/software/cell-ranger-atac/latest/analysis/inputs/direct-demultiplexing-with-illumina-software`
 - Illumina BCL Convert SampleSheet Guide: `https://support-docs.illumina.com/SW/BCL_Convert/Content/SW/BCLConvert/SampleSheets_swBCL.htm`
 
+### Key Use cases:
+
+  1. 3' Gene Expression + Cell Multiplexing (+ Antibody/CRISPR Guide 		Capture)  
+  2. Flex Gene Expression (+ Antibody/CRISPR Guide Capture)  
+  3. 5' Gene Expression + V(D)J (+ FB)  
+  4. 5' Gene Expression + V(D)J + Antigen Capture (BEAM) (+ Antibody 		Capture)
 
 **Suggested pipelines based on library type: **
 
@@ -47,7 +46,6 @@ Please check following websites for detailed information:
 | 5' Gene Expression + V(D)J + Antigen Capture (BEAM) (+ Antibody Capture)     | multi     |
 
 
-# Input/Output Specification
 ## **Inputs**
 ### **Required**
 
@@ -442,9 +440,7 @@ Please check following websites for detailed information:
 * ***Options:** 	"yes", "no"
 * ***Default:** 	"no"
 
-## **Outputs**
-
-### **Reported Outputs**
+### **Outputs**
 
 **geneexpressionmatrix.csv:**
 
@@ -457,8 +453,6 @@ Please check following websites for detailed information:
 * ***Description**: 	 Summary report of run
 * ***Format**: 	 HTML
 * ***Location:** 	results/report.html
-
-### **Supporting Outputs**
 
 **alignedreads.bam:**
 
@@ -473,8 +467,8 @@ Please check following websites for detailed information:
 * ***Location**: 	results/qc/fastqcreport.html
 
 
-
 ### Example Datasets:
+
 #### **Example 1. PBMCs of a Healthy Donor (v1) - 5' Gene Expression + Cell Surface Protein Libraries (VDJ-B + VDJ-T)**
 - **Source**: https://www.10xgenomics.com/datasets/pbm-cs-of-a-healthy-donor-v-1-1-1-standard-3-1-0
 - **Dataset**: https://www.viafoundry.com/test_data/cellranger_multi/fastq_PBMC-VDJ-GEX-downsampled
@@ -513,6 +507,7 @@ https://www.viafoundry.com/test_data/cellranger_multi/fastq_PBMC-VDJ-GEX-downsam
 Not required
 
 #### **Example 2. PBMCs - Multiplexed - CMOs**
+
 * **Source**: 10x Datasets
 * **Dataset**: https://www.viafoundry.com/test_data/cellranger_multi/fastq_PBMCs_Multiplexed_2CMOs_subsampled
 - **feature_reference**:
@@ -547,7 +542,7 @@ https://www.viafoundry.com/test_data/cellranger_multi/fastq_PBMCs_Multiplexed_2C
 | PBMCs_mouse_2	 |	CMO310		 |		PBMCs_mouse_2 |
 
 
-**Example 3. Demultiplexing with BCLConvert:**
+#### **Example 3. Demultiplexing with BCLConvert:**
 - Source: https://www.10xgenomics.com/support/software/cell-ranger/latest/analysis/inputs/cr-direct-demultiplexing-bcl-convert
 - **Dataset**:https://cf.10xgenomics.com/supp/spatial-exp/demultiplexing/iseq-DI.tar.gz
 - **Sample Sheet:** https://cf.10xgenomics.com/supp/spatial-exp/demultiplexing/bcl_convert_samplesheet.csv
@@ -575,7 +570,7 @@ Lane	Sample_ID	index	index2
 	- To test BCL Convert you can use the iseq-DI example dataset. This dual-indexed iSeq dataset has been selected for its small size (541 MB). It should not be used to **run downstream pipelines**.
 
 
-# References & Additional Documentation
+### References and Additional Documentation
 
 **Additional CellRanger Multi information:**  
 [https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/bcl2fastq-direct](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/bcl2fastq-direct)  
