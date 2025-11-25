@@ -31,6 +31,10 @@ if (!params.custom_additional_genome){params.custom_additional_genome = ""}
 if (!params.Metadata){params.Metadata = ""} 
 if (!params.cmo_set){params.cmo_set = ""} 
 if (!params.custom_additional_gtf){params.custom_additional_gtf = ""} 
+if (!params.mask_gtf){params.mask_gtf = ""} 
+if (!params.db_feather){params.db_feather = ""} 
+if (!params.motif_db){params.motif_db = ""} 
+if (!params.tf_lists){params.tf_lists = ""} 
 // Stage empty file to be used as an optional input where required
 ch_empty_file_1 = file("$baseDir/.emptyfiles/NO_FILE_1", hidden:true)
 ch_empty_file_2 = file("$baseDir/.emptyfiles/NO_FILE_2", hidden:true)
@@ -55,6 +59,10 @@ g_40_2_g50_58 = params.custom_additional_genome && file(params.custom_additional
 g_43_1_g51_0 = params.Metadata && file(params.Metadata, type: 'any').exists() ? file(params.Metadata, type: 'any') : ch_empty_file_1
 g_68_9_g_20 = params.cmo_set && file(params.cmo_set, type: 'any').exists() ? file(params.cmo_set, type: 'any') : ch_empty_file_5
 g_69_3_g50_58 = params.custom_additional_gtf && file(params.custom_additional_gtf, type: 'any').exists() ? file(params.custom_additional_gtf, type: 'any') : ch_empty_file_2
+g_71_1_g70_1 = params.mask_gtf && file(params.mask_gtf, type: 'any').exists() ? file(params.mask_gtf, type: 'any') : ch_empty_file_1
+g_75_1_g_74 = file(params.db_feather, type: 'any')
+g_76_2_g_74 = file(params.motif_db, type: 'any')
+g_77_3_g_74 = file(params.tf_lists, type: 'any')
 
 //* @style @array:{bcl_directory,sampleSheet} @multicolumn:{bcl_directory,sampleSheet}
 
@@ -1250,7 +1258,7 @@ output:
 container "quay.io/viascientific/scrna_seurat:2.0"
 
 when:
-(params.run_scRNA_Analysis && (params.run_scRNA_Analysis == "yes")) || !params.run_scRNA_Analysis
+(params.run_scRNA_Analysis && (params.run_scRNA_Analysis == "yes")) || !params.run_scRNA_Analysis || params.run_pySCENIC == "yes"
 
 script:
 
@@ -1505,7 +1513,7 @@ input:
  path seurat_obj
 
 output:
- path "*.h5ad"  ,emit:g51_22_h5ad_file00 
+ path "*.h5ad"  ,emit:g51_22_h5ad_file01_g70_12 
 
 container "quay.io/viascientific/scrna_seurat:2.0"
 
@@ -1551,22 +1559,53 @@ input:
  path seurat_object
 
 output:
- path "Data.loom" ,optional:true  ,emit:g51_30_outputFileOut00 
+ path "Data.loom" ,optional:true  ,emit:g51_30_outputFileOut00_g_74 
 
-container "quay.io/viascientific/scrna_seurat:2.0"
+container "quay.io/mustafapir/scrna_seurat:2.0.2"
 
 script:
 Generate_loom_file = params.scRNA_Analysis_Module_SCEtoLOOM.Generate_loom_file
+
 """
 #!/usr/bin/env Rscript
 
 #library
 library(Seurat)
-if (as.logical("${Generate_loom_file}")) {
-	
+library(biomaRt)
+ 
+if (as.logical("${Generate_loom_file}") || as.logical("${params.run_pySCENIC == 'yes'}")) {
+
 Data=readRDS("${seurat_object}")
 
-annotation=read.csv("https://huggingface.co/datasets/ctheodoris/Genecorpus-30M/raw/main/example_input_files/gene_info_table.csv",header = T,row.names = 1)
+create_annotation_table <- function(organism = c("human", "mouse", "d_melanogaster")) {
+  organism <- match.arg(organism)
+  
+  # Select ENSEMBL dataset depending on organism
+  dataset <- switch(
+    organism,
+    human = "hsapiens_gene_ensembl",
+    mouse = "mmusculus_gene_ensembl",
+    d_melanogaster = "dmelanogaster_gene_ensembl"
+  )
+  
+  # Connect to Ensembl
+  ensembl <- useEnsembl(biomart = "genes", dataset = dataset)
+  
+  # Retrieve Ensembl gene ID, gene name, gene type
+  genes <- getBM(
+    attributes = c("ensembl_gene_id", "external_gene_name", "gene_biotype"),
+    mart = ensembl
+  )
+  
+  # Ensure column names match your exact requested format
+  colnames(genes) <- c("ensembl_id", "gene_name", "gene_type")
+  
+  return(genes)
+}
+
+# annotation=read.csv("https://huggingface.co/datasets/ctheodoris/Genecorpus-30M/raw/main/example_input_files/gene_info_table.csv",header = T,row.names = 1)
+annotation=create_annotation_table("${params.species}")
+
 annotation=annotation[annotation\$gene_name%in%names(table(annotation\$gene_name))[table(annotation\$gene_name)==1],]
 rownames(annotation)=annotation\$gene_name
 metadata=Data@meta.data
@@ -1574,14 +1613,98 @@ matrix=Data@assays\$RNA@counts
 matrix=matrix[rowSums(matrix)>0,]
 matrix=matrix[intersect(rownames(matrix),rownames(annotation)),]
 annotation=annotation[intersect(rownames(matrix),rownames(annotation)),]
-rownames(matrix)=annotation\$ensembl_id
 matrix=matrix[rownames(matrix)[order(rownames(matrix),decreasing = F)],]
 NewData=CreateSeuratObject(matrix,meta.data = metadata)
+NewData[["RNA"]]@meta.features\$ensembl_id=annotation[rownames(NewData),"ensembl_id"]
 NewData.loom <- SeuratDisk::as.loom(NewData, filename = "Data.loom", verbose = FALSE)
 
 }
 """
 
+
+}
+
+//* params.db_feather =  ""  //* @input
+//* params.motif_db =  ""  //* @input
+//* params.tf_lists =  ""  //* @input
+
+
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 48
+    $MEMORY = 64
+}
+//* platform
+//* platform
+//* autofill
+
+process pySCENIC {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /pyscenic_out.zip$/) "pySCENIC_out/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /scenic_integrated.loom$/) "pySCENIC_loom/$filename"}
+input:
+ path loom_file
+ path db_feather
+ path motif_db
+ path tf_lists
+
+output:
+ path "pyscenic_out.zip"  ,emit:g_74_zipFile00 
+ path "scenic_integrated.loom"  ,emit:g_74_loom11 
+
+container 'quay.io/mustafapir/pyscenic:1.0.2'
+
+when:
+params.run_pySCENIC == "yes"
+
+script:
+
+threads = task.cpus
+mask_dropouts = params.pySCENIC.mask_dropouts
+
+mask_dropouts_option = mask_dropouts ? '--mask_dropouts' : ''
+auc_threshold = params.pySCENIC.auc_threshold
+"""
+
+f_db_path=${db_feather}
+f_db_names=\$(echo "\$f_db_path"/*.feather)
+
+f_motif_path=${motif_db}
+f_tfs=${tf_lists}
+
+arboreto_with_multiprocessing.py \
+    ${loom_file} ${tf_lists} \
+    --output adjacencies.csv \
+    --method grnboost2 \
+    --seed 29 \
+    --num_workers ${threads} \
+    --sparse
+
+pyscenic ctx adjacencies.csv \
+    \$f_db_names \
+    --annotations_fname ${motif_db} \
+    --expression_mtx_fname ${loom_file} \
+    --output regulons.csv \
+    ${mask_dropouts_option} \
+    --num_workers ${threads}
+
+pyscenic aucell \
+    ${loom_file} \
+    regulons.csv \
+    --output pyscenic_out.loom \
+    --num_workers ${threads} \
+    --auc_threshold ${auc_threshold}
+
+integrate_pyscenic_output.py \
+    -i ${loom_file} \
+    -p pyscenic_out.loom \
+    -o scenic_integrated.loom \
+    --export_auc_csv aucell_matrix.csv \
+    -t ${threads}
+
+zip pyscenic_out.zip adjacencies.csv regulons.csv aucell_matrix.csv
+
+"""
 
 }
 
@@ -1614,6 +1737,174 @@ mkdir output
 mv by_criteria_summary.tsv output
 mv filtration_summary_report.Rmd output
 mv overall_filtration_summary.tsv output
+"""
+}
+
+
+process RNA_Velocity_Module_prepare_input_velocyto {
+
+input:
+ path outs
+
+output:
+ path "output_files/*"  ,emit:g70_5_outputDir00_g70_1 
+
+when:
+params.run_velocity == "yes"
+
+script:
+
+try {
+	myVariable = bam
+} catch (MissingPropertyException e) {
+	bam = ""
+}
+
+try {
+	myVariable = bai
+} catch (MissingPropertyException e) {
+	bai = ""
+}
+
+try {
+	myVariable = barcodes
+} catch (MissingPropertyException e) {
+	barcodes = ""
+}
+
+run_name = outs.toString().startsWith('NO_FILE')
+    ? name
+    : outs.toString().replaceFirst(/_outs$/, '')
+
+"""
+mkdir -p output_files
+
+echo ${run_name}
+
+if [[ ${outs} == NO_FILE* ]]; then
+    # Create a folder using the task name so the structure matches the loop below
+    mkdir -p output_files/${run_name}
+    
+    mv ${bam} output_files/${run_name}/input.bam
+    mv ${bai} output_files/${run_name}/input.bam.bai
+    mv ${barcodes} output_files/${run_name}/input_barcodes.tsv.gz
+
+
+# --- SCENARIO B: Cell Ranger Output Directory ---
+else
+    # Check for Cell Ranger MULTI (Branching structure)
+    if [ -d ${outs}/per_sample_outs ]; then
+        echo "Detected Cell Ranger MULTI structure"
+        
+        # Loop through every directory inside per_sample_outs
+        for sample_dir in ${outs}/per_sample_outs/*; do
+            
+            # Extract the sample name (e.g., "Sample_Alpha")
+            s_name=\$(basename \$sample_dir)
+            
+            # Create a specific folder for this sample
+            target_dir="output_files/\$s_name"
+            mkdir -p "\$target_dir"
+            
+            # Move and Rename BAM
+            # Note: In multi, it is named 'sample_alignments.bam'
+            if [ -f "\$sample_dir/count/sample_alignments.bam" ]; then
+                mv "\$sample_dir/count/sample_alignments.bam" "\$target_dir/input.bam"
+                mv "\$sample_dir/count/sample_alignments.bam.bai" "\$target_dir/input.bam.bai"
+                
+                # Move Barcodes (Ensure we get the filtered matrix, not raw)
+                mv "\$sample_dir/count/sample_filtered_feature_bc_matrix/barcodes.tsv.gz" "\$target_dir/input_barcodes.tsv.gz"
+            else
+                echo "Warning: No count data found for \$s_name in \$sample_dir"
+                rm -rf "\$target_dir" # Clean up empty dir
+            fi
+        done
+
+    # Check for Cell Ranger COUNT (Flat structure)
+    elif [ -f ${outs}/possorted_genome_bam.bam ]; then
+        echo "Detected Cell Ranger COUNT structure"
+        
+        # Use the run_name derived from the folder name
+        mkdir -p output_files/${run_name}
+        
+        mv "${outs}/possorted_genome_bam.bam" output_files/${run_name}/input.bam
+        mv "${outs}/possorted_genome_bam.bam.bai" output_files/${run_name}/input.bam.bai
+        mv "${outs}/filtered_feature_bc_matrix/barcodes.tsv.gz" output_files/${run_name}/input_barcodes.tsv.gz
+
+    else
+        echo "ERROR: Unknown Cell Ranger structure in ${outs}"
+        exit 1
+    fi
+fi
+"""
+}
+
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 16
+    $MEMORY = 50
+}
+//* platform
+//* platform
+//* autofill
+
+process RNA_Velocity_Module_velocyto {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${name}_output.loom$/) "loom_out/$filename"}
+input:
+ tuple val(name), file(bam), file(barcodes)
+ path mask_gtf
+ path gtf_velo
+
+output:
+ path "${name}_output.loom"  ,emit:g70_1_loom00_g70_12 
+
+container "quay.io/biocontainers/velocyto.py:0.17.17--py310h581d4b6_7"
+
+when:
+params.run_velocity == "yes"
+
+script:
+
+mask_gtf_option = mask_gtf.name.startsWith('NO_FILE') ? "" : "-m ${mask_gtf}"
+
+"""
+echo ${name}
+mkdir -p velocyto_out
+
+cp ${bam} ./local_input.bam
+velocyto run -b ${barcodes} ${mask_gtf_option} -o velocyto_out local_input.bam ${gtf_velo}
+
+mv velocyto_out/*.loom ${name}_output.loom
+
+"""
+}
+
+
+process RNA_Velocity_Module_process_anndata {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /processed_adata.h5ad$/) "scVelo_out/$filename"}
+input:
+ path loom_file
+ path h5ad_file
+
+output:
+ path "processed_adata.h5ad"  ,emit:g70_12_h5ad00 
+
+container 'quay.io/mustafapir/scvelo_shiny:1.1.0'
+
+when:
+params.run_velocity == "yes"
+
+script:
+
+"""
+
+preprocess_anndata.py \
+    --h5ad ${h5ad_file} \
+    --loom ${loom_file} \
+    --output 'processed_adata.h5ad'
+
 """
 }
 
@@ -1726,6 +2017,7 @@ g50_53_bed03_g50_54= g50_53_bed03_g50_54.ifEmpty(ch_empty_file_4)
 
 Check_and_Build_Module_check_files(g50_58_gtfFile10_g50_54,g50_58_genome01_g50_54,g50_52_genomeSizes02_g50_54,g50_53_bed03_g50_54)
 g50_54_gtfFile01_g_7 = Check_and_Build_Module_check_files.out.g50_54_gtfFile01_g_7
+(g50_54_gtfFile02_g70_1) = [g50_54_gtfFile01_g_7]
 g50_54_genome10_g_7 = Check_and_Build_Module_check_files.out.g50_54_genome10_g_7
 g50_54_genomeSizes22 = Check_and_Build_Module_check_files.out.g50_54_genomeSizes22
 g50_54_bed33 = Check_and_Build_Module_check_files.out.g50_54_bed33
@@ -1749,11 +2041,13 @@ g_25_reads17_g_20= g_25_reads17_g_20.ifEmpty(ch_empty_file_6)
 if (!((params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi)){
 g_5_csvFile04_g_20.set{g_20_csvFile22}
 g_20_outputDir00_g_59 = Channel.empty()
+g_20_outputDir00_g70_5 = Channel.empty()
 g_20_outputHTML11 = Channel.empty()
 } else {
 
 cellranger_multi(g_0_reads00_g_20.collect(),g_18_reference01_g_20,g_11_2_g_20,g_12_3_g_20,g_5_csvFile04_g_20.flatten(),g_25_bcl_directory05_g_20,g_4_bcl_directory16_g_20,g_25_reads17_g_20.collect(),g_5_settings18_g_20,g_68_9_g_20)
 g_20_outputDir00_g_59 = cellranger_multi.out.g_20_outputDir00_g_59
+(g_20_outputDir00_g70_5) = [g_20_outputDir00_g_59]
 g_20_outputHTML11 = cellranger_multi.out.g_20_outputHTML11
 g_20_csvFile22 = cellranger_multi.out.g_20_csvFile22
 g_20_csvFile33 = cellranger_multi.out.g_20_csvFile33
@@ -1791,15 +2085,35 @@ g51_19_outFileTSV22 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_
 
 
 scRNA_Analysis_Module_Create_h5ad(g51_19_rdsFile10_g51_22)
-g51_22_h5ad_file00 = scRNA_Analysis_Module_Create_h5ad.out.g51_22_h5ad_file00
+g51_22_h5ad_file01_g70_12 = scRNA_Analysis_Module_Create_h5ad.out.g51_22_h5ad_file01_g70_12
 
 
 scRNA_Analysis_Module_SCEtoLOOM(g51_19_rdsFile10_g51_30)
-g51_30_outputFileOut00 = scRNA_Analysis_Module_SCEtoLOOM.out.g51_30_outputFileOut00
+g51_30_outputFileOut00_g_74 = scRNA_Analysis_Module_SCEtoLOOM.out.g51_30_outputFileOut00_g_74
+
+
+pySCENIC(g51_30_outputFileOut00_g_74,g_75_1_g_74,g_76_2_g_74,g_77_3_g_74)
+g_74_zipFile00 = pySCENIC.out.g_74_zipFile00
+g_74_loom11 = pySCENIC.out.g_74_loom11
 
 
 scRNA_Analysis_Module_filter_summary(g51_0_outFileTSV20_g51_34.collect())
 g51_34_outputFileHTML00 = scRNA_Analysis_Module_filter_summary.out.g51_34_outputFileHTML00
+
+g_20_outputDir00_g70_5= g_20_outputDir00_g70_5.ifEmpty(ch_empty_file_1) 
+
+
+RNA_Velocity_Module_prepare_input_velocyto(g_20_outputDir00_g70_5)
+g70_5_outputDir00_g70_1 = RNA_Velocity_Module_prepare_input_velocyto.out.g70_5_outputDir00_g70_1.flatten().map { item -> return tuple( item.name, item / "input.bam", item / "input_barcodes.tsv.gz" ) }
+
+
+
+RNA_Velocity_Module_velocyto(g70_5_outputDir00_g70_1,g_71_1_g70_1,g50_54_gtfFile02_g70_1.first())
+g70_1_loom00_g70_12 = RNA_Velocity_Module_velocyto.out.g70_1_loom00_g70_12
+
+
+RNA_Velocity_Module_process_anndata(g70_1_loom00_g70_12.collect(),g51_22_h5ad_file01_g70_12)
+g70_12_h5ad00 = RNA_Velocity_Module_process_anndata.out.g70_12_h5ad00
 
 
 }
