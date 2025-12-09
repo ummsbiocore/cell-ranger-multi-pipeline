@@ -1883,13 +1883,12 @@ mv velocyto_out/*.loom ${name}_output.loom
 
 process RNA_Velocity_Module_process_anndata {
 
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /processed_adata.h5ad$/) "scVelo_out/$filename"}
 input:
  path loom_file
  path h5ad_file
 
 output:
- path "processed_adata.h5ad"  ,emit:g70_12_h5ad00 
+ path "processed_adata.h5ad"  ,emit:g70_12_h5ad00_g70_15 
 
 container 'quay.io/mustafapir/scvelo_shiny:1.1.0'
 
@@ -1906,6 +1905,46 @@ preprocess_anndata.py \
     --output 'processed_adata.h5ad'
 
 """
+}
+
+
+process RNA_Velocity_Module_process_scVelo {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /scvelo_out.h5ad$/) "scVelo_out/$filename"}
+input:
+ path input_adata
+
+output:
+ path "scvelo_out.h5ad"  ,emit:g70_15_h5ad00 
+
+container "quay.io/mustafapir/scvelo_shiny:1.1.2"
+
+script:
+
+// clusters = "seurat_clusters" //* @input @description:"Name of clusters column"
+clusters = params.run_annotation == 'yes' ? 'sctype_classification' : 'seurat_clusters'
+
+conditions = params.RNA_Velocity_Module_process_scVelo.conditions
+k_steps = params.RNA_Velocity_Module_process_scVelo.k_steps
+n_macrostates = params.RNA_Velocity_Module_process_scVelo.n_macrostates
+target_clusters = params.RNA_Velocity_Module_process_scVelo.target_clusters
+
+target_clusters_arg = (target_clusters == '') ? '' : "--target_clusters ${target_clusters}"
+
+"""
+
+
+precompute_analysis.py ${input_adata} \
+    --group_col ${clusters} \
+    --condition_col ${conditions} \
+    --k_steps ${k_steps} \
+    --n_macrostates ${n_macrostates} \
+    ${target_clusters_arg} \
+    --output_file scvelo_out.h5ad \
+    --n_jobs 1
+
+"""
+
 }
 
 
@@ -2113,7 +2152,11 @@ g70_1_loom00_g70_12 = RNA_Velocity_Module_velocyto.out.g70_1_loom00_g70_12
 
 
 RNA_Velocity_Module_process_anndata(g70_1_loom00_g70_12.collect(),g51_22_h5ad_file01_g70_12)
-g70_12_h5ad00 = RNA_Velocity_Module_process_anndata.out.g70_12_h5ad00
+g70_12_h5ad00_g70_15 = RNA_Velocity_Module_process_anndata.out.g70_12_h5ad00_g70_15
+
+
+RNA_Velocity_Module_process_scVelo(g70_12_h5ad00_g70_15)
+g70_15_h5ad00 = RNA_Velocity_Module_process_scVelo.out.g70_15_h5ad00
 
 
 }
