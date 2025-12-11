@@ -1652,7 +1652,10 @@ output:
  path "pyscenic_out.zip"  ,emit:g_74_zipFile00 
  path "scenic_integrated.loom"  ,emit:g_74_loom11 
 
-container 'quay.io/mustafapir/pyscenic:1.0.2'
+container 'quay.io/mustafapir/pyscenic:1.0.3'
+
+machineType 'g2-standard-(4|8|16)'
+containerOptions '--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=nvidia.com/gpu=all'
 
 when:
 params.run_pySCENIC == "yes"
@@ -1661,6 +1664,7 @@ script:
 
 threads = task.cpus
 mask_dropouts = params.pySCENIC.mask_dropouts
+use_gpu = params.pySCENIC.use_gpu
 
 mask_dropouts_option = mask_dropouts ? '--mask_dropouts' : ''
 auc_threshold = params.pySCENIC.auc_threshold
@@ -1672,13 +1676,21 @@ f_db_names=\$(echo "\$f_db_path"/*.feather)
 f_motif_path=${motif_db}
 f_tfs=${tf_lists}
 
-arboreto_with_multiprocessing.py \
-    ${loom_file} ${tf_lists} \
-    --output adjacencies.csv \
-    --method grnboost2 \
-    --seed 29 \
-    --num_workers ${threads} \
-    --sparse
+if [ ${use_gpu} = "true" ]; then
+    run_regdiffusion_gpu.py \
+        ${loom_file} ${tf_lists} \
+        --output adjacencies.csv \
+        --num_workers ${threads} \
+        --num_hvg 3000
+else
+    arboreto_with_multiprocessing.py \
+        ${loom_file} ${tf_lists} \
+        --output adjacencies.csv \
+        --method grnboost2 \
+        --seed 29 \
+        --num_workers ${threads} \
+        --sparse
+fi
 
 pyscenic ctx adjacencies.csv \
     \$f_db_names \
@@ -1948,6 +1960,66 @@ precompute_analysis.py ${input_adata} \
 }
 
 
+process Slingshot_Module_slingshot {
+
+input:
+ path input_rds
+
+output:
+ path "sce.rds"  ,emit:g80_1_rdsFile01_g80_4 
+
+container 'quay.io/viascientific/slingshot:1.0.1'
+
+when:
+params.run_slingshot == "yes"
+
+script:
+
+reduction = params.Slingshot_Module_slingshot.reduction
+
+clusters = params.run_annotation == 'yes' ? 'sctype_classification' : 'seurat_clusters'
+"""
+
+slingshot_analysis.R ${input_rds} ${reduction} ${clusters}
+
+"""
+
+}
+
+
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 16
+    $MEMORY = 128
+}
+//* platform
+//* platform
+//* autofill
+
+process Slingshot_Module_fitgam {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /(sce_fitgam.rds|sce.rds)$/) "fitgam_rds/$filename"}
+input:
+ path obj
+ path sce
+
+output:
+ tuple file("sce_fitgam.rds"), file("sce.rds")  ,emit:g80_4_rdsFile00 
+
+container 'quay.io/viascientific/slingshot:1.0.1'
+
+script:
+
+threads = task.cpus
+num_genes = params.Slingshot_Module_fitgam.num_genes
+"""
+
+fitgam.R ${obj} ${sce} ${threads} ${num_genes}
+"""
+
+}
+
+
 workflow {
 
 
@@ -2119,7 +2191,7 @@ g51_17_rdsFile00_g51_19 = scRNA_Analysis_Module_PCA_and_Batch_Effect_Correction.
 scRNA_Analysis_Module_Clustering_and_Find_Markers(g51_17_rdsFile00_g51_19)
 g51_19_outputHTML00 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_outputHTML00
 g51_19_rdsFile10_g51_22 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_rdsFile10_g51_22
-(g51_19_rdsFile10_g51_30) = [g51_19_rdsFile10_g51_22]
+(g51_19_rdsFile10_g51_30,g51_19_rdsFile10_g80_1,g51_19_rdsFile10_g80_4) = [g51_19_rdsFile10_g51_22,g51_19_rdsFile10_g51_22,g51_19_rdsFile10_g51_22]
 g51_19_outFileTSV22 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_outFileTSV22
 
 
@@ -2157,6 +2229,14 @@ g70_12_h5ad00_g70_15 = RNA_Velocity_Module_process_anndata.out.g70_12_h5ad00_g70
 
 RNA_Velocity_Module_process_scVelo(g70_12_h5ad00_g70_15)
 g70_15_h5ad00 = RNA_Velocity_Module_process_scVelo.out.g70_15_h5ad00
+
+
+Slingshot_Module_slingshot(g51_19_rdsFile10_g80_1)
+g80_1_rdsFile01_g80_4 = Slingshot_Module_slingshot.out.g80_1_rdsFile01_g80_4
+
+
+Slingshot_Module_fitgam(g51_19_rdsFile10_g80_4,g80_1_rdsFile01_g80_4)
+g80_4_rdsFile00 = Slingshot_Module_fitgam.out.g80_4_rdsFile00
 
 
 }
