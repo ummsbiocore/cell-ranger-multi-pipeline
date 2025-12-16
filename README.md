@@ -177,12 +177,33 @@ Please check following websites for detailed information:
 * ***Format**: 	INPUT
 * ***Default**: 	0
 
-** Run scRNA-seq Analysis Module
+**Run scRNA-seq Analysis Module
 
 * ***Description**: 	Optional bclconvert parameters
 * ***Format**: 	DROPDOWN
 * ***Options**: 	"yes", "no"
 * ***Default**: 	"yes"
+
+**Run Velocity Analysis Module
+
+* ***Description**: 	Run RNA velocity analysis? This opens options for Velocity module.
+* ***Format**: 	DROPDOWN
+* ***Options**: 	"yes", "no"
+* ***Default**: 	"no"
+
+**Run pySCENIC Module
+
+* ***Description**: 	Run pySCENIC analysis? This opens options for pySCENIC module.
+* ***Format**: 	DROPDOWN
+* ***Options**: 	"yes", "no"
+* ***Default**: 	"no"
+
+**Run Slingshot Module
+
+* ***Description**: 	Run Slingshot analysis? This opens options for Slingshot module.
+* ***Format**: 	DROPDOWN
+* ***Options**: 	"yes", "no"
+* ***Default**: 	"no"
 
 **Download Genomic Sources**
 
@@ -301,6 +322,20 @@ Please check following websites for detailed information:
 | :---- | :---- | :---- |
 | *Sample01* | *Treated* | *1* |
 | *Sample02* | *Control* | *2* |
+
+**Run automated cell-type annotation**
+
+* ***Description**: 	Enable automated cell type annotation. The cells will be annotated using sc-type tool. Link to the paper: https://www.nature.com/articles/s41467-022-28803-w
+* ***Format**: 	DROPDOWN
+* ***Options**: 	"yes", "no"
+* ***Default**: 	"yes"
+
+**Tissue type**
+
+* ***Description**: 	Primary tissue of origin for the input samples. This is used by the pipeline to select tissue-appropriate reference data and marker sets for automated cell-type annotation.
+* ***Format**: 	DROPDOWN
+* ***Options**: 	"Immune system", "Pancreas", "Liver", "Eye", "Kidney", "Brain", "Lung", "Adrenal", "Heart"," Intestine", "Muscle"," Placenta", "Spleen", "Stomach", "Thymus", "Hippocampus"
+* ***Default:** 	"Immune system"
 
 **Remove Mitochondrial Genes**
 
@@ -440,6 +475,73 @@ Please check following websites for detailed information:
 * ***Options:** 	"yes", "no"
 * ***Default:** 	"no"
 
+**mask_gtf**
+
+* ***Description**: 	.gtf file containing intervals to mask. It might be desirable to mask expressed repetitive elements, since those count could constitute a confounding factor in the downstream analysis.
+* ***Format**: 	gtf
+
+**Condition Column**
+
+* ***Description**: 	Name of condition column specified in Metadata table
+* ***Format**: 	INPUT
+* ***Default:** 	"Condition"
+
+**k_steps**
+
+* ***Description**: 	K steps to compute transition probabilities in velocity analysis. Higher K = longer-term predictions. Only the step numbers written will be used.
+* ***Format**: 	INPUT
+* ***Default:** 	"1,2,3"
+
+**Number of Macrostates**
+
+* ***Description**: 	Number of course-grained cell states for fate probability analysis. High values = more detailed trajectory structure.
+* ***Format**: 	INPUT
+* ***Default:** 	"10"
+
+**Target Clusters**
+
+* ***Description**: 	Select specific clusters to include in analysis. Leave empty to analyse all clusters.
+* ***Format**: 	INPUT
+* ***Default:** 	""
+
+**Method to use in GRN inference**
+
+* ***Description**: 	Algorithm to use for gene regulatory network inference. GRNBoost2 is the original method used in pySCENIC workflow but it is the slowest one. Using `regdiffusiton_GPU` will speed up the analysis significantly but may cost more.
+* ***Format**: 	DROPDOWN
+* ***Options:** 	"GRNBoost2", "regdiffusion_GPU", "regdiffusion_CPU"
+* ***Default:** 	"GRNBoost2"
+
+**Number of Highly Variable Genes**
+
+* ***Description**: 	Number of Highly Variable Genes to be included. This limits the analysis to use only a set of the most highly variable genes. This is required if `regdiffusion_GPU` GRN method is selected. A dataset consisting of 38K cells with top 15K highly variable genes requires 20GB of GPU ram, whereas using 3K highly variable genes requires 1.5GB of GPU ram. Please scale these parameters accordingly to avoid high costs.
+* ***Format**: 	INPUT
+* ***Default:** 	""
+
+**Mask Dropouts**
+
+* ***Description**: 	Using this option excludes zero-expression cells when calculating TF-target correlations, focusing only on cells where both genes are expressed. This affects how the correlation between TF and target genes is calculated
+* ***Format**: 	CHECKBOX
+* ***Default:** 	unchecked
+
+**AUC Threshold**
+
+* ***Description**: 	Fraction of the ranked gene list in each cell that is used when computing the AUC (Area Under the Curve) score for each regulon.
+* ***Format**: 	INPUT
+* ***Default:** 	"0.05"
+
+**Reduction**
+
+* ***Description**: 	Reduction to use in slingshot analysis
+* ***Format**: 	DROPDOWN
+* ***Options:** 	"umap", "tsne"
+* ***Default:** 	"umap"
+
+**Number of Genes**
+
+* ***Description**: 	Number of top variable genes to use in fitgam analysis. If empty, all of top variable genes will be used. Set this value for big datasets to make the analysis faster. The lower the value, faster the analysis will be but the results will be less accurate.
+* ***Format**: 	INPUT
+* ***Default:** 	""
+
 ### **Outputs**
 
 **geneexpressionmatrix.csv:**
@@ -465,6 +567,30 @@ Please check following websites for detailed information:
 * ***Description**: 	FastQC report if enabled
 * ***Format**: 	HTML
 * ***Location**: 	results/qc/fastqcreport.html
+
+**scvelo_out.h5ad:**
+
+* ***Description**: 	H5AD file including velocity analysis results. scVelo shiny app is used to explore the results.
+* ***Format**: 	h5ad
+* ***Location**: 	scVelo_out/scvelo_out.h5ad
+
+**sce_fitgam.rds:**
+
+* ***Description**: 	rds file including Seurat object with slingshot analysis results. Slingshot shiny app is used to explore the results.
+* ***Format**: 	rds
+* ***Location**: 	fitgam_rds/sce_fitgam.rds
+
+**scenic_integrated.loom:**
+
+* ***Description**: 	Updated loom file with the AUCell scores added
+* ***Format**: 	loom
+* ***Location**: 	pySCENIC_loom/scenic_integrated.loom
+
+**pyscenic_out.zip:**
+
+* ***Description**: 	Zip file including pySCENIC pipeline result files: adjacencies.csv, regulons.csv and aucell_matrix.csv.
+* ***Format**: 	zip
+* ***Location**: 	pySCENIC_out/pyscenic_out.zip
 
 
 ### Example Datasets:

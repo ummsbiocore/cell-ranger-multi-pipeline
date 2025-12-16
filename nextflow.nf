@@ -60,9 +60,9 @@ g_43_1_g51_0 = params.Metadata && file(params.Metadata, type: 'any').exists() ? 
 g_68_9_g_20 = params.cmo_set && file(params.cmo_set, type: 'any').exists() ? file(params.cmo_set, type: 'any') : ch_empty_file_5
 g_69_3_g50_58 = params.custom_additional_gtf && file(params.custom_additional_gtf, type: 'any').exists() ? file(params.custom_additional_gtf, type: 'any') : ch_empty_file_2
 g_71_1_g70_1 = params.mask_gtf && file(params.mask_gtf, type: 'any').exists() ? file(params.mask_gtf, type: 'any') : ch_empty_file_1
-g_75_1_g_74 = file(params.db_feather, type: 'any')
-g_76_2_g_74 = file(params.motif_db, type: 'any')
-g_77_3_g_74 = file(params.tf_lists, type: 'any')
+g_75_1_g82_8 = file(params.db_feather, type: 'any')
+g_76_2_g82_8 = file(params.motif_db, type: 'any')
+g_77_1_g82_1 = file(params.tf_lists, type: 'any')
 
 //* @style @array:{bcl_directory,sampleSheet} @multicolumn:{bcl_directory,sampleSheet}
 
@@ -1469,14 +1469,13 @@ if ($HOSTNAME == "default"){
 process scRNA_Analysis_Module_Clustering_and_Find_Markers {
 
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /final_report.html$/) "Final_Report/$filename"}
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /Final_Analysis.rds$/) "scViewer/$filename"}
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*.tsv$/) "ClusterMarkers/$filename"}
 input:
  path seurat_object
 
 output:
  path "final_report.html"  ,emit:g51_19_outputHTML00 
- path "Final_Analysis.rds"  ,emit:g51_19_rdsFile10_g51_22 
+ path "Final_Analysis.rds"  ,emit:g51_19_rdsFile10_g51_36 
  path "*.tsv"  ,emit:g51_19_outFileTSV22 
 
 container "quay.io/viascientific/scrna_seurat:2.0"
@@ -1500,46 +1499,62 @@ build_clustering_and_find_markers.py --sample-path ${seurat_object} --min-resolu
 //* autofill
 if ($HOSTNAME == "default"){
     $CPU  = 1
-    $MEMORY = 60
+    $MEMORY = 4
 }
 //* platform
 //* platform
 //* autofill
 
-process scRNA_Analysis_Module_Create_h5ad {
+process scRNA_Analysis_Module_filter_summary {
 
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*.h5ad$/) "H5AD_file/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*$/) "filter_summary/$filename"}
 input:
- path seurat_obj
+ path input_files
 
 output:
- path "*.h5ad"  ,emit:g51_22_h5ad_file01_g70_12 
+ path "*"  ,emit:g51_34_outputFileHTML00 
 
 container "quay.io/viascientific/scrna_seurat:2.0"
 
 script:
+	
 """
-#!/usr/bin/env Rscript
+build_filtration_report.py --input-dir .
 
-# libraries
-library(Seurat)
-library(SeuratDisk)
-
-# read data
-seurat_obj <- readRDS("${seurat_obj}")
-
-for (var in colnames(seurat_obj@meta.data)) {
-  if (is.factor(seurat_obj@meta.data[,var])) {
-    seurat_obj@meta.data[,var]=as.character(seurat_obj@meta.data[,var])
-  }
+mkdir output
+mv by_criteria_summary.tsv output
+mv filtration_summary_report.Rmd output
+mv overall_filtration_summary.tsv output
+"""
 }
 
-# save h5ad file
-seu_name <- gsub(".rds","","${seurat_obj}")
-SaveH5Seurat(seurat_obj, filename = paste0(seu_name,".h5Seurat"))
-Convert(paste0(seu_name,".h5Seurat"), dest = "h5ad")
-"""
 
+process scRNA_Analysis_Module_sc_annotation {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*.rds$/) "scViewer/$filename"}
+input:
+ path input_rds
+
+output:
+ path "*.rds"  ,emit:g51_36_rdsFile00_g51_22 
+
+container 'quay.io/mustafapir/sc_annotation:1.0.0'
+
+script:
+
+tissue_type = params.scRNA_Analysis_Module_sc_annotation.tissue_type
+
+"""
+if [ ${params.run_annotation} = "yes" ]; then
+  run_sctype.R \
+    --input ${input_rds} \
+    --output Final_Analysis_annotated.rds \
+    --organism ${params.species} \
+    --tissue "${tissue_type}" && \
+  rm -f ${input_rds}
+fi
+
+"""
 
 }
 
@@ -1559,7 +1574,7 @@ input:
  path seurat_object
 
 output:
- path "Data.loom" ,optional:true  ,emit:g51_30_outputFileOut00_g_74 
+ path "Data.loom" ,optional:true  ,emit:g51_30_outputFileOut00_g82_1 
 
 container "quay.io/mustafapir/scrna_seurat:2.0.2"
 
@@ -1624,132 +1639,50 @@ NewData.loom <- SeuratDisk::as.loom(NewData, filename = "Data.loom", verbose = F
 
 }
 
-//* params.db_feather =  ""  //* @input
-//* params.motif_db =  ""  //* @input
-//* params.tf_lists =  ""  //* @input
-
-
-//* autofill
-if ($HOSTNAME == "default"){
-    $CPU  = 48
-    $MEMORY = 64
-}
-//* platform
-//* platform
-//* autofill
-
-process pySCENIC {
-
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /pyscenic_out.zip$/) "pySCENIC_out/$filename"}
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /scenic_integrated.loom$/) "pySCENIC_loom/$filename"}
-input:
- path loom_file
- path db_feather
- path motif_db
- path tf_lists
-
-output:
- path "pyscenic_out.zip"  ,emit:g_74_zipFile00 
- path "scenic_integrated.loom"  ,emit:g_74_loom11 
-
-container 'quay.io/mustafapir/pyscenic:1.0.3'
-
-machineType 'g2-standard-(4|8|16)'
-containerOptions '--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=nvidia.com/gpu=all'
-
-when:
-params.run_pySCENIC == "yes"
-
-script:
-
-threads = task.cpus
-mask_dropouts = params.pySCENIC.mask_dropouts
-use_gpu = params.pySCENIC.use_gpu
-
-mask_dropouts_option = mask_dropouts ? '--mask_dropouts' : ''
-auc_threshold = params.pySCENIC.auc_threshold
-"""
-
-f_db_path=${db_feather}
-f_db_names=\$(echo "\$f_db_path"/*.feather)
-
-f_motif_path=${motif_db}
-f_tfs=${tf_lists}
-
-if [ ${use_gpu} = "true" ]; then
-    run_regdiffusion_gpu.py \
-        ${loom_file} ${tf_lists} \
-        --output adjacencies.csv \
-        --num_workers ${threads} \
-        --num_hvg 3000
-else
-    arboreto_with_multiprocessing.py \
-        ${loom_file} ${tf_lists} \
-        --output adjacencies.csv \
-        --method grnboost2 \
-        --seed 29 \
-        --num_workers ${threads} \
-        --sparse
-fi
-
-pyscenic ctx adjacencies.csv \
-    \$f_db_names \
-    --annotations_fname ${motif_db} \
-    --expression_mtx_fname ${loom_file} \
-    --output regulons.csv \
-    ${mask_dropouts_option} \
-    --num_workers ${threads}
-
-pyscenic aucell \
-    ${loom_file} \
-    regulons.csv \
-    --output pyscenic_out.loom \
-    --num_workers ${threads} \
-    --auc_threshold ${auc_threshold}
-
-integrate_pyscenic_output.py \
-    -i ${loom_file} \
-    -p pyscenic_out.loom \
-    -o scenic_integrated.loom \
-    --export_auc_csv aucell_matrix.csv \
-    -t ${threads}
-
-zip pyscenic_out.zip adjacencies.csv regulons.csv aucell_matrix.csv
-
-"""
-
-}
-
 //* autofill
 if ($HOSTNAME == "default"){
     $CPU  = 1
-    $MEMORY = 4
+    $MEMORY = 60
 }
 //* platform
 //* platform
 //* autofill
 
-process scRNA_Analysis_Module_filter_summary {
+process scRNA_Analysis_Module_Create_h5ad {
 
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*$/) "filter_summary/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*.h5ad$/) "H5AD_file/$filename"}
 input:
- path input_files
+ path seurat_obj
 
 output:
- path "*"  ,emit:g51_34_outputFileHTML00 
+ path "*.h5ad"  ,emit:g51_22_h5ad_file01_g70_12 
 
 container "quay.io/viascientific/scrna_seurat:2.0"
 
 script:
-	
 """
-build_filtration_report.py --input-dir .
+#!/usr/bin/env Rscript
 
-mkdir output
-mv by_criteria_summary.tsv output
-mv filtration_summary_report.Rmd output
-mv overall_filtration_summary.tsv output
+# libraries
+library(Seurat)
+library(SeuratDisk)
+
+# read data
+seurat_obj <- readRDS("${seurat_obj}")
+
+for (var in colnames(seurat_obj@meta.data)) {
+  if (is.factor(seurat_obj@meta.data[,var])) {
+    seurat_obj@meta.data[,var]=as.character(seurat_obj@meta.data[,var])
+  }
+}
+
+# save h5ad file
+seu_name <- gsub(".rds","","${seurat_obj}")
+SaveH5Seurat(seurat_obj, filename = paste0(seu_name,".h5Seurat"))
+Convert(paste0(seu_name,".h5Seurat"), dest = "h5ad")
 """
+
+
 }
 
 
@@ -1892,6 +1825,14 @@ mv velocyto_out/*.loom ${name}_output.loom
 """
 }
 
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 8
+    $MEMORY = 50
+}
+//* platform
+//* platform
+//* autofill
 
 process RNA_Velocity_Module_process_anndata {
 
@@ -1902,7 +1843,7 @@ input:
 output:
  path "processed_adata.h5ad"  ,emit:g70_12_h5ad00_g70_15 
 
-container 'quay.io/mustafapir/scvelo_shiny:1.1.0'
+container 'quay.io/viascientific/scvelo_shiny:1.1.4'
 
 when:
 params.run_velocity == "yes"
@@ -1919,6 +1860,14 @@ preprocess_anndata.py \
 """
 }
 
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 16
+    $MEMORY = 64
+}
+//* platform
+//* platform
+//* autofill
 
 process RNA_Velocity_Module_process_scVelo {
 
@@ -1929,7 +1878,7 @@ input:
 output:
  path "scvelo_out.h5ad"  ,emit:g70_15_h5ad00 
 
-container "quay.io/mustafapir/scvelo_shiny:1.1.2"
+container "quay.io/viascientific/scvelo_shiny:1.1.4"
 
 script:
 
@@ -1960,7 +1909,7 @@ precompute_analysis.py ${input_adata} \
 }
 
 
-process Slingshot_Module_slingshot {
+process Trajectory_Module_slingshot {
 
 input:
  path input_rds
@@ -1975,7 +1924,7 @@ params.run_slingshot == "yes"
 
 script:
 
-reduction = params.Slingshot_Module_slingshot.reduction
+reduction = params.Trajectory_Module_slingshot.reduction
 
 clusters = params.run_annotation == 'yes' ? 'sctype_classification' : 'seurat_clusters'
 """
@@ -1996,9 +1945,9 @@ if ($HOSTNAME == "default"){
 //* platform
 //* autofill
 
-process Slingshot_Module_fitgam {
+process Trajectory_Module_fitgam {
 
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /(sce_fitgam.rds|sce.rds)$/) "fitgam_rds/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /(sce_fitgam.rds|sce.rds)$/) "trajectory_out/$filename"}
 input:
  path obj
  path sce
@@ -2011,10 +1960,156 @@ container 'quay.io/viascientific/slingshot:1.0.1'
 script:
 
 threads = task.cpus
-num_genes = params.Slingshot_Module_fitgam.num_genes
+num_genes = params.Trajectory_Module_fitgam.num_genes
 """
 
 fitgam.R ${obj} ${sce} ${threads} ${num_genes}
+"""
+
+}
+
+//* params.db_feather =  ""  //* @input
+//* params.motif_db =  ""  //* @input
+//* params.tf_lists =  ""  //* @input
+
+
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 16
+    $MEMORY = 64
+}
+//* platform
+//* platform
+//* autofill
+
+process pySCENIC_module_pySCENIC_GRN {
+
+input:
+ path loom_file
+ path tf_lists
+
+output:
+ path "adjacencies.csv"  ,emit:g82_1_csvFile00_g82_8 
+
+if (params.GRN_method == "regdiffusion_GPU"){
+    container 'quay.io/viascientific/pyscenic:1.0.2_gpu'
+
+    machineType 'g2-standard-(4|8|16)'
+    containerOptions '-v /var/lib/nvidia/lib64:/usr/local/nvidia/lib64 --device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidia-uvm:/dev/nvidia-uvm --device /dev/nvidiactl:/dev/nvidiactl -e LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}'
+} else if (params.GRN_method == "regdiffusion_CPU"){
+    container 'quay.io/viascientific/pyscenic:1.0.2_gpu'
+} else {
+    container 'quay.io/viascientific/pyscenic:1.0.2'
+}
+
+when:
+params.run_pySCENIC == "yes"
+
+script:
+
+threads = task.cpus
+GRN_method = params.GRN_method
+// GRN_method = "GRNBoost2" //* @dropdown @options:"GRNBoost2","regdiffusion_GPU","regdiffusion_CPU" @label:"Method to use in GRN inference" @description:"Algorithm to use for gene regulatory network inference. GRNBoost2 is the original method used in pySCENIC workflow but it is the slowest one. Using `regdiffusiton_GPU` will speed up the analysis significantly but will cost more."
+num_of_hvg = params.pySCENIC_module_pySCENIC_GRN.num_of_hvg
+
+arg_num_of_hvg = (num_of_hvg == "") ? "" : "--num_hvg ${num_of_hvg}"
+
+"""
+
+if [ ${GRN_method} = "regdiffusion_GPU" ]; then
+    run_regdiffusion_gpu.py \
+        ${loom_file} ${tf_lists} \
+        --output adjacencies.csv \
+        --num_workers ${threads} \
+        ${arg_num_of_hvg}
+elif [ ${GRN_method} = "regdiffusion_CPU" ]; then
+    run_regdiffusion_gpu.py \
+        ${loom_file} ${tf_lists} \
+        --output adjacencies.csv \
+        --num_workers ${threads} \
+        ${arg_num_of_hvg} \
+        --cpu
+else
+    arboreto_with_multiprocessing.py \
+        ${loom_file} ${tf_lists} \
+        --output adjacencies.csv \
+        --method grnboost2 \
+        --seed 29 \
+        --num_workers ${threads} \
+        --sparse
+fi
+
+"""
+
+}
+
+
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 16
+    $MEMORY = 64
+}
+//* platform
+//* platform
+//* autofill
+
+process pySCENIC_module_pySCENIC_ctx_auc {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /pyscenic_out.zip$/) "pySCENIC_out/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /scenic_integrated.loom$/) "pySCENIC_loom/$filename"}
+input:
+ path adj
+ path db_feather
+ path motif_db
+ path loom_file
+
+output:
+ path "pyscenic_out.zip"  ,emit:g82_8_zip_file00 
+ path "scenic_integrated.loom"  ,emit:g82_8_loom11 
+
+container 'quay.io/viascientific/pyscenic:1.0.3'
+
+when:
+params.run_pySCENIC == "yes"
+
+script:
+
+threads = task.cpus
+mask_dropouts = params.pySCENIC_module_pySCENIC_ctx_auc.mask_dropouts
+
+mask_dropouts_option = mask_dropouts ? '--mask_dropouts' : ''
+auc_threshold = params.pySCENIC_module_pySCENIC_ctx_auc.auc_threshold
+"""
+
+f_db_path=${db_feather}
+f_db_names=\$(echo "\$f_db_path"/*.feather)
+
+f_motif_path=${motif_db}
+
+pyscenic ctx ${adj} \
+    \$f_db_names \
+    --annotations_fname ${motif_db} \
+    --expression_mtx_fname ${loom_file} \
+    --output regulons.csv \
+    ${mask_dropouts_option} \
+    --num_workers ${threads}
+
+pyscenic aucell \
+    ${loom_file} \
+    regulons.csv \
+    --output pyscenic_out.loom \
+    --num_workers ${threads} \
+    --auc_threshold ${auc_threshold}
+
+integrate_pyscenic_output.py \
+    -i ${loom_file} \
+    -p pyscenic_out.loom \
+    -o scenic_integrated.loom \
+    --export_auc_csv aucell_matrix.csv \
+    -t ${threads}
+
+zip pyscenic_out.zip adjacencies.csv regulons.csv aucell_matrix.csv
+
 """
 
 }
@@ -2190,26 +2285,26 @@ g51_17_rdsFile00_g51_19 = scRNA_Analysis_Module_PCA_and_Batch_Effect_Correction.
 
 scRNA_Analysis_Module_Clustering_and_Find_Markers(g51_17_rdsFile00_g51_19)
 g51_19_outputHTML00 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_outputHTML00
-g51_19_rdsFile10_g51_22 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_rdsFile10_g51_22
-(g51_19_rdsFile10_g51_30,g51_19_rdsFile10_g80_1,g51_19_rdsFile10_g80_4) = [g51_19_rdsFile10_g51_22,g51_19_rdsFile10_g51_22,g51_19_rdsFile10_g51_22]
+g51_19_rdsFile10_g51_36 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_rdsFile10_g51_36
 g51_19_outFileTSV22 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_outFileTSV22
-
-
-scRNA_Analysis_Module_Create_h5ad(g51_19_rdsFile10_g51_22)
-g51_22_h5ad_file01_g70_12 = scRNA_Analysis_Module_Create_h5ad.out.g51_22_h5ad_file01_g70_12
-
-
-scRNA_Analysis_Module_SCEtoLOOM(g51_19_rdsFile10_g51_30)
-g51_30_outputFileOut00_g_74 = scRNA_Analysis_Module_SCEtoLOOM.out.g51_30_outputFileOut00_g_74
-
-
-pySCENIC(g51_30_outputFileOut00_g_74,g_75_1_g_74,g_76_2_g_74,g_77_3_g_74)
-g_74_zipFile00 = pySCENIC.out.g_74_zipFile00
-g_74_loom11 = pySCENIC.out.g_74_loom11
 
 
 scRNA_Analysis_Module_filter_summary(g51_0_outFileTSV20_g51_34.collect())
 g51_34_outputFileHTML00 = scRNA_Analysis_Module_filter_summary.out.g51_34_outputFileHTML00
+
+
+scRNA_Analysis_Module_sc_annotation(g51_19_rdsFile10_g51_36)
+g51_36_rdsFile00_g51_22 = scRNA_Analysis_Module_sc_annotation.out.g51_36_rdsFile00_g51_22
+(g51_36_rdsFile00_g51_30,g51_36_rdsFile00_g80_1,g51_36_rdsFile00_g80_4) = [g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22]
+
+
+scRNA_Analysis_Module_SCEtoLOOM(g51_36_rdsFile00_g51_30)
+g51_30_outputFileOut00_g82_1 = scRNA_Analysis_Module_SCEtoLOOM.out.g51_30_outputFileOut00_g82_1
+(g51_30_outputFileOut03_g82_8) = [g51_30_outputFileOut00_g82_1]
+
+
+scRNA_Analysis_Module_Create_h5ad(g51_36_rdsFile00_g51_22)
+g51_22_h5ad_file01_g70_12 = scRNA_Analysis_Module_Create_h5ad.out.g51_22_h5ad_file01_g70_12
 
 g_20_outputDir00_g70_5= g_20_outputDir00_g70_5.ifEmpty(ch_empty_file_1) 
 
@@ -2231,12 +2326,21 @@ RNA_Velocity_Module_process_scVelo(g70_12_h5ad00_g70_15)
 g70_15_h5ad00 = RNA_Velocity_Module_process_scVelo.out.g70_15_h5ad00
 
 
-Slingshot_Module_slingshot(g51_19_rdsFile10_g80_1)
-g80_1_rdsFile01_g80_4 = Slingshot_Module_slingshot.out.g80_1_rdsFile01_g80_4
+Trajectory_Module_slingshot(g51_36_rdsFile00_g80_1)
+g80_1_rdsFile01_g80_4 = Trajectory_Module_slingshot.out.g80_1_rdsFile01_g80_4
 
 
-Slingshot_Module_fitgam(g51_19_rdsFile10_g80_4,g80_1_rdsFile01_g80_4)
-g80_4_rdsFile00 = Slingshot_Module_fitgam.out.g80_4_rdsFile00
+Trajectory_Module_fitgam(g51_36_rdsFile00_g80_4,g80_1_rdsFile01_g80_4)
+g80_4_rdsFile00 = Trajectory_Module_fitgam.out.g80_4_rdsFile00
+
+
+pySCENIC_module_pySCENIC_GRN(g51_30_outputFileOut00_g82_1,g_77_1_g82_1)
+g82_1_csvFile00_g82_8 = pySCENIC_module_pySCENIC_GRN.out.g82_1_csvFile00_g82_8
+
+
+pySCENIC_module_pySCENIC_ctx_auc(g82_1_csvFile00_g82_8,g_75_1_g82_8,g_76_2_g82_8,g51_30_outputFileOut03_g82_8)
+g82_8_zip_file00 = pySCENIC_module_pySCENIC_ctx_auc.out.g82_8_zip_file00
+g82_8_loom11 = pySCENIC_module_pySCENIC_ctx_auc.out.g82_8_loom11
 
 
 }
