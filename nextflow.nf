@@ -1174,7 +1174,6 @@ except subprocess.CalledProcessError:
 
 """
 
-
 }
 
 
@@ -1184,14 +1183,15 @@ input:
  path output_dir
 
 output:
- path "*.h5"  ,emit:g_59_h5_file00_g_61 
+ tuple val(run_id), file("*.h5"), file("raw/*.h5"), file("raw/*.csv")  ,emit:g_59_h5_file00_g_512 
+
+disk 300.GB 
 
 script:
+
+run_id = output_dir.toString().replace('_outs', '')
 """
 #!/bin/bash
-
-
-
 
 outputdir=${output_dir}
 
@@ -1212,20 +1212,35 @@ if test -d \$outputdir/per_sample_outs/
 		done
 fi
 
+mkdir -p raw
+# cp \$outputdir/multi/count/raw_feature_bc_matrix.h5 ./raw/${run_id}_raw.h5
+# cp \$outputdir/multi/multiplexing_analysis/tag_calls_per_cell.csv ./raw/${run_id}_tag_calls_per_cell.csv
 
+# Copy raw matrix (should exist for both multiplexed and non-multiplexed)
+if test -f \$outputdir/multi/count/raw_feature_bc_matrix.h5; then
+	cp \$outputdir/multi/count/raw_feature_bc_matrix.h5 ./raw/${run_id}_raw.h5
+fi
+
+# Copy tag calls (only exists for multiplexed samples)
+if test -f \$outputdir/multi/multiplexing_analysis/tag_calls_per_cell.csv; then
+	cp \$outputdir/multi/multiplexing_analysis/tag_calls_per_cell.csv ./raw/${run_id}_tag_calls_per_cell.csv
+else
+	# Create empty placeholder for non-multiplexed samples
+	echo "No multiplexing data available" > ./raw/${run_id}_tag_calls_per_cell.csv
+fi
 
 """
 
 }
 
 
-process file_to_set_conversion_for_h5 {
+process file_to_set_conversion_for_h5_tmp {
 
 input:
- path h5
+ tuple val(run_id), file(h5), file(h5_raw), file(tags)
 
 output:
- tuple val(name),file(h5)  ,emit:g_61_h5_file00_g51_0 
+ tuple val(run_id), val(name), file(h5), file(h5_raw), file(tags)  ,emit:g_512_h5_file00_g51_0 
 
 script:
 name = h5.baseName
@@ -1247,7 +1262,7 @@ process scRNA_Analysis_Module_Quality_Control_and_Filtering {
 
 publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /${name}_filtering_report.html$/) "QC_Reports/$filename"}
 input:
- tuple val(name), file(input_file)
+ tuple val(run_id), val(name), file(input_file), file(raw), file(tags)
  path metadata
 
 output:
@@ -1255,7 +1270,7 @@ output:
  tuple val(name),file("${name}_filtering_report.html")  ,emit:g51_0_outputFileHTML11 
  path "${name}_filter_summary.tsv"  ,emit:g51_0_outFileTSV20_g51_34 
 
-container "quay.io/viascientific/scrna_seurat:2.0"
+container "quay.io/viascientific/scrna_seurat:2.1"
 
 when:
 (params.run_scRNA_Analysis && (params.run_scRNA_Analysis == "yes")) || !params.run_scRNA_Analysis || params.run_pySCENIC == "yes"
@@ -1264,7 +1279,7 @@ script:
 
 remove_mitochondiral_genes = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.remove_mitochondiral_genes
 remove_ribosomal_genes = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.remove_ribosomal_genes
-	
+
 min_genes = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.min_genes
 max_genes = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.max_genes
 min_UMIs = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.min_UMIs
@@ -1274,6 +1289,7 @@ percent_ribosomal = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.p
 
 doublet_removal = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.doublet_removal
 doublet_percentage = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.doublet_percentage
+doublet_removal_tool = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.doublet_removal_tool
 
 normalization_method = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.normalization_method
 variable_features = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.variable_features
@@ -1281,15 +1297,29 @@ variable_features = params.scRNA_Analysis_Module_Quality_Control_and_Filtering.v
 remove_mitochondiral_genes_arg = remove_mitochondiral_genes == 'true' ? '--remove-mitochondrial-genes' : ''
 remove_ribosomal_genes_arg = remove_ribosomal_genes == 'true' ? '--remove_ribosomal_genes' : ''
 
-//* @style @multicolumn:{remove_mitochondiral_genes, remove_ribosomal_genes}, {min_genes, max_genes}, {min_UMIs, max_UMIs}, {percent_mitochondrial, percent_ribosomal}, {doublet_removal, doublet_percentage}, {normalization_method, variable_features}
+//* @style @condition:{doublet_removal="true", doublet_percentage, doublet_removal_tool},{doublet_removal="false"} @multicolumn:{remove_mitochondiral_genes, remove_ribosomal_genes}, {min_genes, max_genes}, {min_UMIs, max_UMIs}, {percent_mitochondrial, percent_ribosomal}, {doublet_percentage, doublet_removal_tool}, {normalization_method, variable_features}
+
+doublet_percentage_arg = doublet_percentage ? "--doublet-percentage ${doublet_percentage}" : ""
 
 """
-build_QC_report.py --output-prefix ${name} --input-file ${input_file} --metadata-file ${metadata} \
+
+tags_arg=""
+if [ -s ${tags} ] && [ \$(wc -l < ${tags}) -gt 1 ]; then
+    echo "Valid tags file detected - including in analysis"
+    tags_arg="--tags-file ${tags}"
+else
+    tags_arg="--tags-file ''"
+fi
+
+echo \$tags_arg
+
+build_QC_report.py --output-prefix ${name} --input-file ${input_file} --input-well ${raw} \$tags_arg \
+--metadata-file ${metadata} \
 --min-genes ${min_genes} --max-genes ${max_genes} \
 --min-UMIs ${min_UMIs} --max-UMIs ${max_UMIs} \
 --percent-mitochondrial-cutoff ${percent_mitochondrial} --percent-ribosomal-cutoff ${percent_ribosomal} ${remove_mitochondiral_genes_arg} ${remove_ribosomal_genes_arg} \
 --variable-features ${variable_features} --normalization-method ${normalization_method} \
---doublet-removal ${doublet_removal} --doublet-percentage ${doublet_percentage}
+--doublet-removal ${doublet_removal} ${doublet_percentage_arg} --doublet-tool ${doublet_removal_tool}
 """
 
 
@@ -1528,6 +1558,14 @@ mv overall_filtration_summary.tsv output
 """
 }
 
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 4
+    $MEMORY = 20
+}
+//* platform
+//* platform
+//* autofill
 
 process scRNA_Analysis_Module_sc_annotation {
 
@@ -1689,7 +1727,6 @@ Convert(paste0(seu_name,".h5Seurat"), dest = "h5ad")
 process RNA_Velocity_Module_prepare_input_velocyto {
 
 input:
- path outs
 
 output:
  path "output_files/*"  ,emit:g70_5_outputDir00_g70_1 
@@ -2247,13 +2284,11 @@ g_25_reads17_g_20= g_25_reads17_g_20.ifEmpty(ch_empty_file_6)
 if (!((params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi)){
 g_5_csvFile04_g_20.set{g_20_csvFile22}
 g_20_outputDir00_g_59 = Channel.empty()
-g_20_outputDir00_g70_5 = Channel.empty()
 g_20_outputHTML11 = Channel.empty()
 } else {
 
 cellranger_multi(g_0_reads00_g_20.collect(),g_18_reference01_g_20,g_11_2_g_20,g_12_3_g_20,g_5_csvFile04_g_20.flatten(),g_25_bcl_directory05_g_20,g_4_bcl_directory16_g_20,g_25_reads17_g_20.collect(),g_5_settings18_g_20,g_68_9_g_20)
 g_20_outputDir00_g_59 = cellranger_multi.out.g_20_outputDir00_g_59
-(g_20_outputDir00_g70_5) = [g_20_outputDir00_g_59]
 g_20_outputHTML11 = cellranger_multi.out.g_20_outputHTML11
 g_20_csvFile22 = cellranger_multi.out.g_20_csvFile22
 g_20_csvFile33 = cellranger_multi.out.g_20_csvFile33
@@ -2261,15 +2296,15 @@ g_20_csvFile33 = cellranger_multi.out.g_20_csvFile33
 
 
 Multi_h5_explorer(g_20_outputDir00_g_59)
-g_59_h5_file00_g_61 = Multi_h5_explorer.out.g_59_h5_file00_g_61
+g_59_h5_file00_g_512 = Multi_h5_explorer.out.g_59_h5_file00_g_512
 
 
-file_to_set_conversion_for_h5(g_59_h5_file00_g_61.flatten())
-g_61_h5_file00_g51_0 = file_to_set_conversion_for_h5.out.g_61_h5_file00_g51_0
+file_to_set_conversion_for_h5_tmp(g_59_h5_file00_g_512.transpose())
+g_512_h5_file00_g51_0 = file_to_set_conversion_for_h5_tmp.out.g_512_h5_file00_g51_0
 
 
 
-scRNA_Analysis_Module_Quality_Control_and_Filtering(g_61_h5_file00_g51_0,g_43_1_g51_0)
+scRNA_Analysis_Module_Quality_Control_and_Filtering(g_512_h5_file00_g51_0,g_43_1_g51_0)
 g51_0_rdsFile00_g51_14 = scRNA_Analysis_Module_Quality_Control_and_Filtering.out.g51_0_rdsFile00_g51_14
 g51_0_outputFileHTML11 = scRNA_Analysis_Module_Quality_Control_and_Filtering.out.g51_0_outputFileHTML11
 g51_0_outFileTSV20_g51_34 = scRNA_Analysis_Module_Quality_Control_and_Filtering.out.g51_0_outFileTSV20_g51_34
@@ -2306,10 +2341,8 @@ g51_30_outputFileOut00_g82_1 = scRNA_Analysis_Module_SCEtoLOOM.out.g51_30_output
 scRNA_Analysis_Module_Create_h5ad(g51_36_rdsFile00_g51_22)
 g51_22_h5ad_file01_g70_12 = scRNA_Analysis_Module_Create_h5ad.out.g51_22_h5ad_file01_g70_12
 
-g_20_outputDir00_g70_5= g_20_outputDir00_g70_5.ifEmpty(ch_empty_file_1) 
 
-
-RNA_Velocity_Module_prepare_input_velocyto(g_20_outputDir00_g70_5)
+RNA_Velocity_Module_prepare_input_velocyto()
 g70_5_outputDir00_g70_1 = RNA_Velocity_Module_prepare_input_velocyto.out.g70_5_outputDir00_g70_1.flatten().map { item -> return tuple( item.name, item / "input.bam", item / "input_barcodes.tsv.gz" ) }
 
 

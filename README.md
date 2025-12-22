@@ -388,15 +388,22 @@ Please check following websites for detailed information:
 **Remove Doublets**
 
 * ***Description**: 	Whether doublet from sample should be removed. TRUE means that the 	doublet detection/removal will be run and FALSE means it will not. 	DEFAULT means the pipeline will try to detect whether the data is 	from a cellranger multi pipeline, if yes the doublet removal will 	not be run.
-* ***Format**: 	DROPDOWN
-* ***Options**: 	"DEFAULT", "TRUE", "FALSE"
-* ***Default:** 	"DEFAULT"
+* ***Description**: 	When checked, doublets will be removed.
+* ***Format**: 	checkbox
+* ***Default:** 	unchecked
 
-**Doublet Percentage**
+**Doublet Rate**
 
-* ***Description**: 	Doublet percentage to use during doublet removal.
+* ***Description**: 	Doublet rate per 1K cells to use during doublet removal. The default, 0.008 (e.g. 3.2% doublets among 4000 cells), is appropriate for standard 10X chips. For High Throughput (HT) 10X chips, use half, i.e. 0.004. (Some more recent chips might have this rate even lower)
 * ***Format**: 	INPUT
-* ***Default:** 	"0.01"
+* ***Default:** 	"0.008"
+
+**Doublet Removal Tool**
+
+* ***Description**: 	Tool for doublet removing.
+* ***Format**: 	DROPDOWN
+* ***Options:** 	"scDblFinder", "DoubletFinder"
+* ***Default:** 	"scDblFinder"
 
 **Normalization Method**
 
