@@ -173,6 +173,33 @@ def read_input():
 	  }
 	}
 
+	# if (RawInput && !CellRangerMultiModal) {
+
+	#   # empty = emptyDrops(data[!rownames(data) %in% mt.genes,])
+	# 	empty <- tryCatch({
+	# 		emptyDrops(data[!rownames(data) %in% mt.genes,])
+	# 	}, error = function(e) {
+	# 		message("emptyDrops failed: ", e$message)
+	# 		return(NULL)
+	# 	})
+	# 	if (!is.null(empty)) {
+
+	# 		empty = data.frame(empty)
+	# 		empty = empty[!is.na(empty$FDR),]
+	# 		empty$DropIdentity = ifelse(empty$FDR<0.001, yes="Non Empty", no="Empty")
+			
+	# 		ggplot(empty, aes(x = DropIdentity, y = Total)) +
+	# 			geom_bar(stat = 'identity') +
+	# 			xlab("Droplet classification") +
+	# 			ylab("Number of UMIs per cell") +
+	# 			ggtitle("Empty Droplet classification")
+			
+	# 		data=data[, rownames(empty)[empty$FDR<0.05]]
+	# 	} else {
+	# 		data <- sample_data
+	# 	}
+	# }
+
 	if (RawInput && !CellRangerMultiModal) {
 
 	  empty = emptyDrops(data[!rownames(data) %in% mt.genes,])

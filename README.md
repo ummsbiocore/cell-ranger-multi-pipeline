@@ -330,6 +330,13 @@ Please check following websites for detailed information:
 * ***Options**: 	"yes", "no"
 * ***Default**: 	"yes"
 
+**Run TCR analysis**
+
+* ***Description**: 	Run TCR analysis? Selecting this option will make TCR analysis shiny app available.
+* ***Format**: 	DROPDOWN
+* ***Options**: 	"yes", "no"
+* ***Default**: 	"no"
+
 **Tissue type**
 
 * ***Description**: 	Primary tissue of origin for the input samples. This is used by the pipeline to select tissue-appropriate reference data and marker sets for automated cell-type annotation.

@@ -1007,6 +1007,7 @@ output:
  path "*_web_summary.html"  ,emit:g_20_outputHTML11 
  path "final_${config}"  ,emit:g_20_csvFile22 
  path "*filtered_contig_annotations.csv" ,optional:true  ,emit:g_20_csvFile33 
+ path "vdj_contig_annotations/*filtered_contig_annotations.csv" ,optional:true  ,emit:g_20_csvFile42_g51_40 
 
 disk { 1500.GB * task.attempt }
 stageInMode 'copy'
@@ -1170,6 +1171,13 @@ try:
 	subprocess.run("for i in \$(ls ${run_id}_outs/per_sample_outs); do cp ${run_id}_outs/per_sample_outs/\${i}/vdj_t_gd/filtered_contig_annotations.csv ${config_id}_\${i}_vdj_t_gd_filtered_contig_annotations.csv; done", shell=True, check=True)
 except subprocess.CalledProcessError:
 	print("INFO: vdj_t_gd/filtered_contig_annotations.csv was not found to publish it to report tab.")
+
+# Rename the vdj files for app
+subprocess.run("mkdir -p vdj_contig_annotations", shell=True, check=True)
+try:
+	subprocess.run("for i in \$(ls ${run_id}_outs/per_sample_outs); do cp ${run_id}_outs/per_sample_outs/\${i}/vdj_t/filtered_contig_annotations.csv vdj_contig_annotations/\${i}_vdj_t_filtered_contig_annotations.csv; done", shell=True, check=True)
+except subprocess.CalledProcessError:
+	print("INFO: vdj_t/filtered_contig_annotations.csv was not found to publish it to report tab.")
 
 
 """
@@ -1724,9 +1732,38 @@ Convert(paste0(seu_name,".h5Seurat"), dest = "h5ad")
 }
 
 
+process scRNA_Analysis_Module_tcr_analysis {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /tcr_analysis.rds$/) "tcr_analysis/$filename"}
+input:
+ path final_rds
+ path annotated_final_rds
+ path vdj_contigs
+
+output:
+ path "tcr_analysis.rds"  ,emit:g51_40_rdsFile00 
+
+
+when:
+(params.run_tcr_analysis && (params.run_tcr_analysis == "yes")) && !vdj_contigs.toString().contains("NO_FILE")
+
+script:
+
+"""
+if [[ "${annotated_final_rds}" == *NO_FILE* ]]; then
+    mv ${final_rds} tcr_analysis.rds
+else
+    mv ${annotated_final_rds} tcr_analysis.rds
+fi
+
+"""
+}
+
+
 process RNA_Velocity_Module_prepare_input_velocyto {
 
 input:
+ path outs
 
 output:
  path "output_files/*"  ,emit:g70_5_outputDir00_g70_1 
@@ -2284,14 +2321,17 @@ g_25_reads17_g_20= g_25_reads17_g_20.ifEmpty(ch_empty_file_6)
 if (!((params.run_cellranger_multi && (params.run_cellranger_multi == "yes")) || !params.run_cellranger_multi)){
 g_5_csvFile04_g_20.set{g_20_csvFile22}
 g_20_outputDir00_g_59 = Channel.empty()
+g_20_outputDir00_g70_5 = Channel.empty()
 g_20_outputHTML11 = Channel.empty()
 } else {
 
 cellranger_multi(g_0_reads00_g_20.collect(),g_18_reference01_g_20,g_11_2_g_20,g_12_3_g_20,g_5_csvFile04_g_20.flatten(),g_25_bcl_directory05_g_20,g_4_bcl_directory16_g_20,g_25_reads17_g_20.collect(),g_5_settings18_g_20,g_68_9_g_20)
 g_20_outputDir00_g_59 = cellranger_multi.out.g_20_outputDir00_g_59
+(g_20_outputDir00_g70_5) = [g_20_outputDir00_g_59]
 g_20_outputHTML11 = cellranger_multi.out.g_20_outputHTML11
 g_20_csvFile22 = cellranger_multi.out.g_20_csvFile22
 g_20_csvFile33 = cellranger_multi.out.g_20_csvFile33
+g_20_csvFile42_g51_40 = cellranger_multi.out.g_20_csvFile42_g51_40
 }
 
 
@@ -2321,6 +2361,7 @@ g51_17_rdsFile00_g51_19 = scRNA_Analysis_Module_PCA_and_Batch_Effect_Correction.
 scRNA_Analysis_Module_Clustering_and_Find_Markers(g51_17_rdsFile00_g51_19)
 g51_19_outputHTML00 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_outputHTML00
 g51_19_rdsFile10_g51_36 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_rdsFile10_g51_36
+(g51_19_rdsFile10_g51_40) = [g51_19_rdsFile10_g51_36]
 g51_19_outFileTSV22 = scRNA_Analysis_Module_Clustering_and_Find_Markers.out.g51_19_outFileTSV22
 
 
@@ -2330,7 +2371,7 @@ g51_34_outputFileHTML00 = scRNA_Analysis_Module_filter_summary.out.g51_34_output
 
 scRNA_Analysis_Module_sc_annotation(g51_19_rdsFile10_g51_36)
 g51_36_rdsFile00_g51_22 = scRNA_Analysis_Module_sc_annotation.out.g51_36_rdsFile00_g51_22
-(g51_36_rdsFile00_g51_30,g51_36_rdsFile00_g80_1,g51_36_rdsFile00_g80_4) = [g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22]
+(g51_36_rdsFile00_g51_30,g51_36_rdsFile01_g51_40,g51_36_rdsFile00_g80_1,g51_36_rdsFile00_g80_4) = [g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22]
 
 
 scRNA_Analysis_Module_SCEtoLOOM(g51_36_rdsFile00_g51_30)
@@ -2341,8 +2382,17 @@ g51_30_outputFileOut00_g82_1 = scRNA_Analysis_Module_SCEtoLOOM.out.g51_30_output
 scRNA_Analysis_Module_Create_h5ad(g51_36_rdsFile00_g51_22)
 g51_22_h5ad_file01_g70_12 = scRNA_Analysis_Module_Create_h5ad.out.g51_22_h5ad_file01_g70_12
 
+g51_36_rdsFile01_g51_40= g51_36_rdsFile01_g51_40.ifEmpty(ch_empty_file_1) 
+g_20_csvFile42_g51_40= g_20_csvFile42_g51_40.ifEmpty(ch_empty_file_2) 
 
-RNA_Velocity_Module_prepare_input_velocyto()
+
+scRNA_Analysis_Module_tcr_analysis(g51_19_rdsFile10_g51_40,g51_36_rdsFile01_g51_40,g_20_csvFile42_g51_40)
+g51_40_rdsFile00 = scRNA_Analysis_Module_tcr_analysis.out.g51_40_rdsFile00
+
+g_20_outputDir00_g70_5= g_20_outputDir00_g70_5.ifEmpty(ch_empty_file_1) 
+
+
+RNA_Velocity_Module_prepare_input_velocyto(g_20_outputDir00_g70_5)
 g70_5_outputDir00_g70_1 = RNA_Velocity_Module_prepare_input_velocyto.out.g70_5_outputDir00_g70_1.flatten().map { item -> return tuple( item.name, item / "input.bam", item / "input_barcodes.tsv.gz" ) }
 
 
