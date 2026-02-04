@@ -2188,6 +2188,80 @@ zip pyscenic_out.zip adjacencies.csv regulons.csv aucell_matrix.csv
 
 }
 
+//* autofill
+if ($HOSTNAME == "default"){
+    $CPU  = 8
+    $MEMORY = 60 
+}
+//* platform
+//* platform
+//* autofill
+
+process CellChat2_create_cellchat_obj {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /.*_cellchat.rds$/) "single_sample_analysis/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /signalling_scripts\/.*.rmd$/) "scripts/$filename"}
+input:
+ path seurat_obj
+
+output:
+ path "*_cellchat.rds"  ,emit:g514_1_rdsFile00 
+ path "signalling_scripts/*.rmd"  ,emit:g514_1_rMarkdown11 
+ path "cellchat_list.rds"  ,emit:g514_1_rdsFile20_g514_5 
+
+container 'quay.io/viascientific/cellchat2:2.0.0'
+
+script:
+
+threads = task.cpus
+source_cells = params.sources_use ?: 'FALSE'
+target_cells = params.targets_use ?: 'FALSE'
+"""
+rds_file="\$(which create_cellchat_obj.R)"
+
+sed -i 's/\\r${'$'}//' "\${rds_file}"
+
+create_cellchat_obj.R ${seurat_obj} ${params.ident} ${params.organism} ${params.db_type} ${threads} ${params.smooth} \
+    ${params.cell_groups} ${source_cells} ${target_cells} ${params.trim} ${params.min_cells}
+
+rmd_file="\$(which signalling.rmd)"
+mkdir -p signalling_scripts
+
+cp "\${rmd_file}" signalling_scripts/
+"""
+}
+
+
+process CellChat2_cellchat_comparison {
+
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /scripts\/.*.rmd$/) "scripts/$filename"}
+publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /report_input_files\/.*.rds$/) "comparison_analysis_result/$filename"}
+input:
+ path rds
+
+output:
+ path "scripts/*.rmd"  ,emit:g514_5_rMarkdown00 
+ path "report_input_files/*.rds"  ,emit:g514_5_rdsFile11 
+
+
+script:
+
+"""
+ls
+files=( cellchat_list.rds )
+echo "\${files[@]}"
+SAMPLES=()
+
+rmd_file="\$(which compare.rmd)"
+mkdir -p report_input_files
+mkdir -p scripts
+
+cp "\${rmd_file}" scripts/
+cp "\${files[@]}" report_input_files/
+
+"""
+}
+
 
 workflow {
 
@@ -2371,7 +2445,7 @@ g51_34_outputFileHTML00 = scRNA_Analysis_Module_filter_summary.out.g51_34_output
 
 scRNA_Analysis_Module_sc_annotation(g51_19_rdsFile10_g51_36)
 g51_36_rdsFile00_g51_22 = scRNA_Analysis_Module_sc_annotation.out.g51_36_rdsFile00_g51_22
-(g51_36_rdsFile00_g51_30,g51_36_rdsFile01_g51_40,g51_36_rdsFile00_g80_1,g51_36_rdsFile00_g80_4) = [g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22]
+(g51_36_rdsFile00_g51_30,g51_36_rdsFile01_g51_40,g51_36_rdsFile00_g80_1,g51_36_rdsFile00_g80_4,g51_36_rdsFile00_g514_1) = [g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22]
 
 
 scRNA_Analysis_Module_SCEtoLOOM(g51_36_rdsFile00_g51_30)
@@ -2424,6 +2498,17 @@ g82_1_csvFile00_g82_8 = pySCENIC_module_pySCENIC_GRN.out.g82_1_csvFile00_g82_8
 pySCENIC_module_pySCENIC_ctx_auc(g82_1_csvFile00_g82_8,g_75_1_g82_8,g_76_2_g82_8,g51_30_outputFileOut03_g82_8)
 g82_8_zip_file00 = pySCENIC_module_pySCENIC_ctx_auc.out.g82_8_zip_file00
 g82_8_loom11 = pySCENIC_module_pySCENIC_ctx_auc.out.g82_8_loom11
+
+
+CellChat2_create_cellchat_obj(g51_36_rdsFile00_g514_1)
+g514_1_rdsFile00 = CellChat2_create_cellchat_obj.out.g514_1_rdsFile00
+g514_1_rMarkdown11 = CellChat2_create_cellchat_obj.out.g514_1_rMarkdown11
+g514_1_rdsFile20_g514_5 = CellChat2_create_cellchat_obj.out.g514_1_rdsFile20_g514_5
+
+
+CellChat2_cellchat_comparison(g514_1_rdsFile20_g514_5.collect())
+g514_5_rMarkdown00 = CellChat2_cellchat_comparison.out.g514_5_rMarkdown00
+g514_5_rdsFile11 = CellChat2_cellchat_comparison.out.g514_5_rdsFile11
 
 
 }
