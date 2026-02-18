@@ -1982,66 +1982,6 @@ precompute_analysis.py ${input_adata} \
 
 }
 
-
-process Trajectory_Module_slingshot {
-
-input:
- path input_rds
-
-output:
- path "sce.rds"  ,emit:g80_1_rdsFile01_g80_4 
-
-container 'quay.io/viascientific/slingshot:1.0.1'
-
-when:
-params.run_slingshot == "yes"
-
-script:
-
-reduction = params.Trajectory_Module_slingshot.reduction
-
-clusters = params.run_annotation == 'yes' ? 'sctype_classification' : 'seurat_clusters'
-"""
-
-slingshot_analysis.R ${input_rds} ${reduction} ${clusters}
-
-"""
-
-}
-
-
-//* autofill
-if ($HOSTNAME == "default"){
-    $CPU  = 16
-    $MEMORY = 128
-}
-//* platform
-//* platform
-//* autofill
-
-process Trajectory_Module_fitgam {
-
-publishDir params.outdir, mode: 'copy', saveAs: {filename -> if (filename =~ /(sce_fitgam.rds|sce.rds)$/) "trajectory_out/$filename"}
-input:
- path obj
- path sce
-
-output:
- tuple file("sce_fitgam.rds"), file("sce.rds")  ,emit:g80_4_rdsFile00 
-
-container 'quay.io/viascientific/slingshot:1.0.1'
-
-script:
-
-threads = task.cpus
-num_genes = params.Trajectory_Module_fitgam.num_genes
-"""
-
-fitgam.R ${obj} ${sce} ${threads} ${num_genes}
-"""
-
-}
-
 //* params.db_feather =  ""  //* @input
 //* params.motif_db =  ""  //* @input
 //* params.tf_lists =  ""  //* @input
@@ -2445,7 +2385,7 @@ g51_34_outputFileHTML00 = scRNA_Analysis_Module_filter_summary.out.g51_34_output
 
 scRNA_Analysis_Module_sc_annotation(g51_19_rdsFile10_g51_36)
 g51_36_rdsFile00_g51_22 = scRNA_Analysis_Module_sc_annotation.out.g51_36_rdsFile00_g51_22
-(g51_36_rdsFile00_g51_30,g51_36_rdsFile01_g51_40,g51_36_rdsFile00_g80_1,g51_36_rdsFile00_g80_4,g51_36_rdsFile00_g514_1) = [g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22]
+(g51_36_rdsFile00_g51_30,g51_36_rdsFile01_g51_40,g51_36_rdsFile00_g514_1) = [g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22,g51_36_rdsFile00_g51_22]
 
 
 scRNA_Analysis_Module_SCEtoLOOM(g51_36_rdsFile00_g51_30)
@@ -2481,14 +2421,6 @@ g70_12_h5ad00_g70_15 = RNA_Velocity_Module_process_anndata.out.g70_12_h5ad00_g70
 
 RNA_Velocity_Module_process_scVelo(g70_12_h5ad00_g70_15)
 g70_15_h5ad00 = RNA_Velocity_Module_process_scVelo.out.g70_15_h5ad00
-
-
-Trajectory_Module_slingshot(g51_36_rdsFile00_g80_1)
-g80_1_rdsFile01_g80_4 = Trajectory_Module_slingshot.out.g80_1_rdsFile01_g80_4
-
-
-Trajectory_Module_fitgam(g51_36_rdsFile00_g80_4,g80_1_rdsFile01_g80_4)
-g80_4_rdsFile00 = Trajectory_Module_fitgam.out.g80_4_rdsFile00
 
 
 pySCENIC_module_pySCENIC_GRN(g51_30_outputFileOut00_g82_1,g_77_1_g82_1)
