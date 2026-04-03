@@ -82,7 +82,7 @@ output:
  val bcl_and_sampleSheets  ,emit:g_4_bcl00_g_0 
  val bcl_directory  ,emit:g_4_bcl_directory16_g_20 
 
-container 'quay.io/viascientific/pipeline_base_image:1.0'
+container 'quay.io/ummsbiocore/pipeline_base_image:1.0'
 
 when:
 params.run_bclConvert == "yes"
@@ -119,7 +119,7 @@ output:
 
 disk { 1500.GB * task.attempt }
 
-container 'quay.io/viascientific/bclconvert:4.3.6'
+container 'quay.io/ummsbiocore/bclconvert:4.3.6'
 
 when:
 params.run_bclConvert == "yes"
@@ -503,7 +503,7 @@ output:
  path "${newNameFasta}"  ,emit:g50_21_genome00_g50_58 
  path "${newNameGtf}"  ,emit:g50_21_gtfFile10_g50_57 
 
-container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/pipeline_base_image:1.0" : "quay.io/viascientific/pipeline_base_image:1.0" }"
+container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/pipeline_base_image:1.0" : "quay.io/ummsbiocore/pipeline_base_image:1.0" }"
 
 
 when:
@@ -702,7 +702,7 @@ output:
  path "${genomeName}_custom.fa"  ,emit:g50_58_genome00_g50_52 
  path "${gtfName}_custom_sorted.gtf"  ,emit:g50_58_gtfFile10_g50_53 
 
-container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/custom_sequence_to_genome_gtf:1.0" : "quay.io/viascientific/custom_sequence_to_genome_gtf:1.0" }"
+container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/custom_sequence_to_genome_gtf:1.0" : "quay.io/ummsbiocore/custom_sequence_to_genome_gtf:1.0" }"
 
 when:
 params.add_sequences_to_reference == "yes"
@@ -771,7 +771,7 @@ input:
 output:
  path "${gtfName}.bed"  ,emit:g50_53_bed03_g50_54 
 
-container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/rnaseq:4.0" : "quay.io/viascientific/rnaseq:4.0" }"
+container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/rnaseq:4.0" : "quay.io/ummsbiocore/rnaseq:4.0" }"
 
 when:
 params.run_Download_Genomic_Sources == "yes"
@@ -858,7 +858,7 @@ output:
  path "*/${genomeSizes2}" ,optional:true  ,emit:g50_54_genomeSizes22 
  path "*/${bed2}" ,optional:true  ,emit:g50_54_bed33 
 
-container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/pipeline_base_image:1.0" : "quay.io/viascientific/pipeline_base_image:1.0" }"
+container "${ params.IMAGE_BASE ? "${params.IMAGE_BASE}/pipeline_base_image:1.0" : "quay.io/ummsbiocore/pipeline_base_image:1.0" }"
 
 stageInMode 'copy'
 
@@ -963,7 +963,7 @@ input:
 output:
  path "*/${transcriptome}" ,optional:true  ,emit:g_18_reference01_g_20 
 
-container 'quay.io/viascientific/pipeline_base_image:1.0'
+container 'quay.io/ummsbiocore/pipeline_base_image:1.0'
 stageInMode 'copy'
 
 script:
@@ -1278,7 +1278,7 @@ output:
  tuple val(name),file("${name}_filtering_report.html")  ,emit:g51_0_outputFileHTML11 
  path "${name}_filter_summary.tsv"  ,emit:g51_0_outFileTSV20_g51_34 
 
-container "quay.io/viascientific/scrna_seurat:2.1"
+container "quay.io/ummsbiocore/scrna_seurat:2.1"
 
 when:
 (params.run_scRNA_Analysis && (params.run_scRNA_Analysis == "yes")) || !params.run_scRNA_Analysis || params.run_pySCENIC == "yes"
@@ -1351,7 +1351,7 @@ input:
 output:
  path "merged_filtered_seurat.rds"  ,emit:g51_14_rdsFile00_g51_17 
 
-container "quay.io/viascientific/scrna_seurat:2.0"
+container "quay.io/ummsbiocore/scrna_seurat:2.0"
 
 script:
 """
@@ -1397,7 +1397,7 @@ input:
 output:
  path "Reduced_and_Corrected.rds"  ,emit:g51_17_rdsFile00_g51_19 
 
-container "quay.io/viascientific/scrna_seurat:2.0"
+container "quay.io/ummsbiocore/scrna_seurat:2.0"
 
 script:
 varFeatures = params.scRNA_Analysis_Module_PCA_and_Batch_Effect_Correction.varFeatures
@@ -1516,7 +1516,7 @@ output:
  path "Final_Analysis.rds"  ,emit:g51_19_rdsFile10_g51_36 
  path "*.tsv"  ,emit:g51_19_outFileTSV22 
 
-container "quay.io/viascientific/scrna_seurat:2.0"
+container "quay.io/ummsbiocore/scrna_seurat:2.0"
 
 script:
 min_resolution = params.scRNA_Analysis_Module_Clustering_and_Find_Markers.min_resolution
@@ -1552,7 +1552,7 @@ input:
 output:
  path "*"  ,emit:g51_34_outputFileHTML00 
 
-container "quay.io/viascientific/scrna_seurat:2.0"
+container "quay.io/ummsbiocore/scrna_seurat:2.0"
 
 script:
 	
@@ -1703,7 +1703,7 @@ input:
 output:
  path "*.h5ad"  ,emit:g51_22_h5ad_file01_g70_12 
 
-container "quay.io/viascientific/scrna_seurat:2.0"
+container "quay.io/ummsbiocore/scrna_seurat:2.0"
 
 script:
 """
@@ -1917,7 +1917,7 @@ input:
 output:
  path "processed_adata.h5ad"  ,emit:g70_12_h5ad00_g70_15 
 
-container 'quay.io/viascientific/scvelo_shiny:1.1.4'
+container 'quay.io/ummsbiocore/scvelo_shiny:1.1.4'
 
 when:
 params.run_velocity == "yes"
@@ -1952,7 +1952,7 @@ input:
 output:
  path "scvelo_out.h5ad"  ,emit:g70_15_h5ad00 
 
-container "quay.io/viascientific/scvelo_shiny:1.1.4"
+container "quay.io/ummsbiocore/scvelo_shiny:1.1.4"
 
 script:
 
@@ -2006,14 +2006,14 @@ output:
  path "adjacencies.csv"  ,emit:g82_1_csvFile00_g82_8 
 
 if (params.GRN_method == "regdiffusion_GPU"){
-    container 'quay.io/viascientific/pyscenic:1.0.2_gpu'
+    container 'quay.io/ummsbiocore/pyscenic:1.0.2_gpu'
 
     machineType 'g2-standard-(4|8|16)'
     containerOptions '-v /var/lib/nvidia/lib64:/usr/local/nvidia/lib64 --device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidia-uvm:/dev/nvidia-uvm --device /dev/nvidiactl:/dev/nvidiactl -e LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}'
 } else if (params.GRN_method == "regdiffusion_CPU"){
-    container 'quay.io/viascientific/pyscenic:1.0.2_gpu'
+    container 'quay.io/ummsbiocore/pyscenic:1.0.2_gpu'
 } else {
-    container 'quay.io/viascientific/pyscenic:1.0.2'
+    container 'quay.io/ummsbiocore/pyscenic:1.0.2'
 }
 
 when:
@@ -2081,7 +2081,7 @@ output:
  path "pyscenic_out.zip"  ,emit:g82_8_zip_file00 
  path "scenic_integrated.loom"  ,emit:g82_8_loom11 
 
-container 'quay.io/viascientific/pyscenic:1.0.3'
+container 'quay.io/ummsbiocore/pyscenic:1.0.3'
 
 when:
 params.run_pySCENIC == "yes"
@@ -2149,7 +2149,7 @@ output:
  path "signalling_scripts/*.rmd"  ,emit:g514_1_rMarkdown11 
  path "cellchat_list.rds"  ,emit:g514_1_rdsFile20_g514_5 
 
-container 'quay.io/viascientific/cellchat2:2.0.0'
+container 'quay.io/ummsbiocore/cellchat2:2.0.0'
 
 script:
 
